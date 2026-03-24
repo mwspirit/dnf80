@@ -916,7 +916,7 @@
       : '；更换装备后的最终抗魔：<span class="muted">未录入换装前角色总抗魔</span>';
     return `<div class="result-lines">
       <div class="result-line metrics">基础：${plan.baseScore.toLocaleString()}；加成：${plan.bonusScore.toLocaleString()}${finalPart}</div>
-      <div class="result-line plan"><div>穿戴方案：</div><div class="plan-group-list">${grouped.join('')}</div></div>
+      <div class="result-line plan"><div>穿戴方案（<span class="plan-note" style="color:var(--red);font-weight:800;">请仔细确认角色是否拥有或可升级到以下星级的装备</span>）</div><div class="plan-group-list">${grouped.join('')}</div></div>
     </div>`;
   }
 
