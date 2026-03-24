@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>套装抗魔最优搭配计算器</title>
+  <style>
+    :root{
+      --bg:#f4f7fb;--card:#fff;--line:#d9e2ef;--text:#1f2937;--muted:#5b6573;--blue:#2563eb;
+      --blue-soft:#eef4ff;--green:#1e9f57;--green-soft:#e7f7ed;--yellow:#b98600;--yellow-soft:#fff4c9;
+      --red:#c43d3d;--red-soft:#fee8e8;--purple:#7c3aed;--purple-soft:#f3e8ff;--cyan:#0891b2;--cyan-soft:#e0f7fa;--shadow:0 10px 28px rgba(15,23,42,.08);--radius:18px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",Arial,sans-serif}
+    body{overflow-x:hidden}
+    .page{max-width:1560px;margin:0 auto;padding:10px;display:grid;gap:9px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+    .hero{padding:13px 15px;background:linear-gradient(135deg,#fff 0%,#edf4ff 100%)}
+    .hero h1{margin:0 0 6px;font-size:30px}
+    .hero p{margin:4px 0;color:var(--muted);line-height:1.7;font-size:15px}
+    .author{font-weight:800;color:var(--blue)}
+    .toolbar{padding:11px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .toolbar button,.modal-actions button,.summary-chip{
+      border:1px solid var(--line);background:#fff;border-radius:12px;min-height:46px;padding:0 14px;
+      font-size:15px;color:var(--text);cursor:pointer;transition:.12s transform,.12s box-shadow;
+    }
+    .toolbar button:hover,.modal-actions button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
+    .toolbar .primary,.modal-actions .primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+
+    .table-actions{padding:0 12px 12px;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+    .table-actions button{border:1px solid var(--line);background:#fff;border-radius:12px;min-height:44px;padding:0 14px;font-size:15px;color:var(--text);cursor:pointer;transition:.12s transform,.12s box-shadow}
+    .table-actions button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
+    .table-actions .primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+    .status{margin:0 12px 12px;padding:9px 11px;border-radius:12px;border:1px solid var(--line);background:#f8fbff;font-size:14px;line-height:1.6;color:var(--muted)}
+    .status.error{background:#fff2f2;border-color:#efb6b6;color:#8d1f1f}
+    .status.ok{background:#edf9f1;border-color:#bce3c8;color:#17633c}
+    .result-status-inline{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+    .inline-calc-btn{border:1px solid var(--blue);background:var(--blue);color:#fff;border-radius:12px;min-height:40px;padding:0 16px;font-size:14px;font-weight:800;cursor:pointer;transition:.12s transform,.12s box-shadow}
+    .inline-calc-btn:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
+
+    .tabs{display:flex;gap:8px;padding:8px}
+    .tab-btn{flex:1;border:1px solid var(--line);background:#fff;border-radius:14px;min-height:48px;padding:0 14px;font-size:16px;font-weight:800;color:var(--text);cursor:pointer}
+    .tab-btn.active{background:var(--blue);border-color:var(--blue);color:#fff}
+    .tab-panel{display:none;gap:9px}
+    .tab-panel.active{display:grid}
+    .calc-bar{padding:12px;display:flex;justify-content:center}
+    .calc-bar button{border:1px solid var(--blue);background:var(--blue);color:#fff;border-radius:14px;min-height:48px;padding:0 22px;font-size:16px;font-weight:800;cursor:pointer}
+
+    details.group{overflow:hidden}
+    details.group summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 12px;font-weight:800;font-size:16px}
+    details.group summary::-webkit-details-marker{display:none}
+    details.group summary .summary-right{font-size:13px;font-weight:700;color:var(--muted)}
+    .group-body{padding:0 12px 12px}
+    .group-body.current-panel{padding-top:0}
+
+    .lock-grid,.current-grid{display:grid;gap:7px 6px}
+    .lock-grid{grid-template-columns:repeat(8,minmax(0,1fr))}
+    .lock-item,.current-item{display:grid;gap:6px}
+    .lock-item label,.current-item label{font-size:14px;font-weight:800}
+    .lock-select,.current-select,.current-star,.score-input{
+      width:100%;height:44px;border:1px solid #c8d3e0;border-radius:12px;background:#fff;padding:0 10px;font-size:15px;outline:none
+    }
+    .lock-select:focus,.current-select:focus,.current-star:focus,.score-input:focus,.star-input:focus,.inv-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+    .current-top{display:grid;grid-template-columns:minmax(220px,250px) minmax(0,1fr);gap:8px;align-items:start;margin-bottom:8px}
+    .score-box{display:grid;gap:6px}
+    .score-box label{font-size:14px;font-weight:800}
+    .summary-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+    .summary-card{border:1px solid var(--line);border-radius:14px;background:#fbfdff;padding:8px 10px;display:grid;gap:2px}
+    .summary-label{font-size:13px;color:var(--muted)}
+    .summary-value{font-size:20px;font-weight:900}
+    .current-grid{grid-template-columns:repeat(8,minmax(0,1fr))}
+    .current-controls{display:grid;grid-template-columns:minmax(0,1fr) 78px;gap:4px}
+    .hide{display:none!important}
+
+    .results-wrap{display:grid;gap:8px}
+    details.rank-card, .rank-card-plain{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;box-shadow:var(--shadow)}
+    details.rank-card.rank1, .rank-card-plain.rank1{border-color:#cdebd7;background:linear-gradient(180deg,#f8fffb 0%,#fff 100%)}
+    details.rank-card.rank2{border-color:#f0df9f;background:linear-gradient(180deg,#fffdf2 0%,#fff 100%)}
+    details.rank-card.rank3{border-color:#efb6b6;background:linear-gradient(180deg,#fff8f8 0%,#fff 100%)}
+    details.rank-card.rank4{border-color:#d8c5ff;background:linear-gradient(180deg,#fcf8ff 0%,#fff 100%)}
+    details.rank-card.rank5{border-color:#bfeaf3;background:linear-gradient(180deg,#f4fdff 0%,#fff 100%)}
+    .rank-card summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 12px;font-weight:900}
+    .rank-card summary::-webkit-details-marker{display:none}
+    .rank-card summary .summary-main{font-size:20px;font-weight:900;line-height:1.2}
+    .rank-card.rank1 summary .summary-main{color:var(--green)}
+    .rank-card.rank2 summary .summary-main{color:#9a6a00}
+    .rank-card.rank3 summary .summary-main{color:var(--red)}
+    .rank-card.rank4 summary .summary-main{color:var(--purple)}
+    .rank-card.rank5 summary .summary-main{color:#0891b2}
+    .rank-card summary .summary-right{font-size:13px;color:var(--muted);font-weight:700;flex:0 0 auto}
+    .rank-body{padding:0 12px 12px;display:grid;gap:8px}
+    .result-lines{display:grid;gap:8px}
+    .result-line{border:1px solid var(--line);border-radius:14px;background:#fff;padding:10px 12px;line-height:1.7}
+    .result-line.metrics{font-size:16px;font-weight:800}
+    .result-line.metrics .muted{color:var(--muted);font-weight:700}
+    .result-line.metrics .final-inline{color:var(--red);font-weight:900}
+    .result-line.plan{display:grid;gap:8px}
+    .plan-group-list{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+    .plan-group{display:inline-flex;align-items:center;gap:6px;max-width:100%;border:1px solid rgba(0,0,0,.08);background:#fff;border-radius:999px;padding:6px 10px;font-size:14px;line-height:1.4}
+    .plan-group .group-name{font-weight:900;color:var(--text)}
+    .plan-group .group-items{color:var(--muted);font-weight:700}
+    .suit-name.suit-green{color:var(--green)}
+    .suit-name.suit-red{color:var(--red)}
+
+    .legend{padding:0 2px;display:flex;flex-wrap:wrap;gap:8px;font-size:14px;color:var(--muted)}
+    .legend-item{display:inline-flex;align-items:center;gap:7px}
+    .swatch{width:14px;height:14px;border-radius:999px;display:inline-block}
+
+    .table-card{padding:0;overflow:hidden;max-width:100%}
+    .table-top{padding:10px 12px 0;font-size:14px;line-height:1.55;color:var(--muted)}
+    .table-wrap{width:100%;max-width:100%;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x pan-y;border-top:1px solid var(--line)}
+    table{border-collapse:collapse;width:max(100%,1100px);min-width:1100px;table-layout:fixed;background:#fff}
+    thead th{position:sticky;top:0;z-index:3;background:#eef3fb;font-size:14px}
+    thead th:first-child{left:0;z-index:5;width:62px;min-width:62px;max-width:62px}
+    tbody th{position:sticky;left:0;z-index:2;background:#f7f9fd;width:62px;min-width:62px;max-width:62px;font-weight:900}
+    th,td{border:1px solid #e5eaf2;padding:6px 4px;text-align:center;vertical-align:middle}
+    .part70b-head{background:#dbeafe}
+    .th-sub{display:block;font-size:10px;color:var(--blue);font-weight:700;margin-top:2px;line-height:1.1}
+    .cell{display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;position:relative}
+    .star-input,.inv-input{appearance:textfield;-moz-appearance:textfield}
+    .star-input::-webkit-outer-spin-button,.star-input::-webkit-inner-spin-button,.inv-input::-webkit-outer-spin-button,.inv-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+    .star-input{width:39px;height:40px;padding:4px 4px;text-align:center;border:1px solid #cdd5e1;border-radius:10px;font-size:16px;outline:none;background:#fff}
+    .mini{width:34px;height:34px;min-height:34px;border-radius:10px;border:1px solid #cdd5e1;background:#fff;cursor:pointer;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
+    .mini.active{background:#eef4ff;border-color:#b9d0ff;color:#1e40af}
+    .badges{position:absolute;top:-6px;right:-2px;display:flex;gap:2px;pointer-events:none;flex-wrap:nowrap;justify-content:flex-end;white-space:nowrap}
+    .badge{width:18px;height:18px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;box-shadow:0 3px 8px rgba(0,0,0,.18)}
+    .badges.badges-crowded{right:-4px;gap:0}
+    .badges.badges-crowded .badge + .badge{margin-left:-6px}
+    .badge.b1{background:var(--green)} .badge.b2{background:var(--yellow);color:#573d00} .badge.b3{background:var(--red)} .badge.b4{background:var(--purple)} .badge.b5{background:var(--cyan)}
+    td.rank1{background:#e5f6ec!important} td.rank2{background:#fff4cb!important} td.rank3{background:#ffe7e7!important} td.rank4{background:#f3e8ff!important} td.rank5{background:#e0f7fa!important}
+    td.locked-choice{box-shadow:inset 0 0 0 2px #3b82f6}
+    td.part70b{background:#eff6ff!important}
+
+    .floating-head{display:none;position:fixed;top:0;left:0;width:100%;z-index:50;background:rgba(255,255,255,.98);border-bottom:1px solid var(--line);box-shadow:0 8px 18px rgba(15,23,42,.08);backdrop-filter:blur(6px)}
+    .floating-head.show{display:block}
+    .floating-head-inner{overflow:hidden}
+    .floating-head-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .floating-head-scroll::-webkit-scrollbar{display:none}
+    .floating-head table{border-collapse:collapse;table-layout:fixed;background:#fff}
+    .floating-head thead th{position:sticky;top:0;z-index:3;background:#eef3fb;font-size:14px}
+    .floating-head thead th:first-child{left:0;z-index:5;width:62px;min-width:62px;max-width:62px}
+
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:14px;background:rgba(15,23,42,.38);z-index:80;overflow:auto}
+    .modal.show{display:flex}
+    .modal-card{width:min(520px,100%);max-height:calc(100vh - 28px);border-radius:18px;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow);padding:16px;overflow:auto}
+    .modal-title{margin:0 0 6px;font-size:22px}
+    .modal-sub{margin:0 0 12px;color:var(--muted);font-size:14px;line-height:1.7}
+    .modal-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+    .inv-item{display:grid;gap:6px}
+    .inv-item label{font-size:13px;color:var(--muted);text-align:center}
+    .inv-input{width:100%;height:42px;border:1px solid #cdd5e1;border-radius:10px;text-align:center;font-size:16px}
+    .modal-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px}
+    .preview{font-size:15px;font-weight:800;color:var(--blue)}
+    .preview.error{color:var(--red)}
+    .modal-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .import-card{width:min(760px,100%);display:flex;flex-direction:column;max-height:calc(100vh - 28px);overflow:auto}
+    .import-card .modal-bottom{position:sticky;bottom:0;background:#fff;padding-top:10px;margin-top:12px;border-top:1px solid var(--line)}
+    .import-textarea{width:100%;min-height:260px;max-height:46vh;border:1px solid #cdd5e1;border-radius:12px;padding:12px 14px;font-size:15px;line-height:1.7;resize:vertical;outline:none;font-family:"Consolas","Courier New","Microsoft YaHei",monospace}
+    .import-textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+    .import-order{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#f8fbff;color:var(--muted);font-size:13px;line-height:1.75}
+
+    .cache-slots{display:grid;gap:10px;max-height:min(70vh,620px);overflow:auto;padding-right:2px}
+    .cache-slot{border:1px solid var(--line);border-radius:14px;background:#fbfdff;padding:12px;display:grid;gap:10px}
+    .cache-slot.empty{background:#fff}
+    .cache-slot-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+    .cache-slot-title{font-size:16px;font-weight:900;line-height:1.3}
+    .cache-slot-meta{font-size:13px;color:var(--muted);line-height:1.6}
+    .cache-slot-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .cache-slot-actions button{border:1px solid var(--line);background:#fff;border-radius:12px;min-height:42px;padding:0 14px;font-size:14px;color:var(--text);cursor:pointer;transition:.12s transform,.12s box-shadow}
+    .cache-slot-actions button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
+    .cache-slot-actions button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+    .cache-slot-actions button:disabled{opacity:.48;cursor:not-allowed;transform:none;box-shadow:none}
+
+    @media (max-width:1200px){
+      .lock-grid,.current-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+    }
+    @media (max-width:900px){
+      .page{padding:10px}
+      .hero{padding:14px}
+      .hero h1{font-size:25px}
+      .hero p{font-size:15px}
+      .toolbar button{flex:1 1 calc(50% - 5px);font-size:15px;min-height:48px}
+      .lock-grid,.current-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .current-top{grid-template-columns:1fr}
+      .summary-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .current-controls{grid-template-columns:minmax(0,1fr) 76px}
+      table{width:max(100%,943px);min-width:943px}
+      tbody th{width:37px;min-width:37px;max-width:37px}
+      .star-input{width:39px;height:40px;font-size:17px}
+      .mini{width:36px;height:36px;min-height:36px}
+      .modal{align-items:flex-start}
+      .modal-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+    @media (max-width:560px){
+      .toolbar button{flex:1 1 100%}
+      .table-actions button{flex:1 1 100%}
+      .summary-row{grid-template-columns:1fr}
+      .modal-actions{width:100%}
+      .modal-actions button{flex:1 1 0}
+      .tabs{padding:6px}
+      .tab-btn,.calc-bar button{font-size:15px}
+      .calc-bar{padding:10px}
+      .calc-bar button{width:100%}
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="card hero">
+      <h1>套装抗魔最优搭配计算器</h1>
+      <p>录入主表中每件装备当前可用的最高星级，系统会自动精确计算抗魔最高的前 5 套方案，并在主表中直接高亮推荐选择。</p>
+      <p class="author">作者：凯丽-神秘势力-流浪剑客</p>
+    </section>
+
+    <section class="card">
+      <div class="tabs">
+        <button class="tab-btn active" id="inputTabBtn" type="button">输入数据</button>
+        <button class="tab-btn" id="resultsTabBtn" type="button">Top5结果</button>
+      </div>
+    </section>
+
+    <section class="tab-panel active" id="inputTabPanel">
+      <section class="card">
+        <div class="toolbar">
+          <button class="primary" id="randomBtn" type="button">填入随机测试数据</button>
+          <button id="clearTableBtn" type="button">清空表格数据</button>
+          <button id="clearLocksBtn" type="button">清空锁定</button>
+          <button id="clearCurrentBtn" type="button">清空当前装备和抗魔</button>
+          <button id="cacheBtn" type="button">保存数据到缓存</button>
+        </div>
+        <div class="status" id="statusBox">修改输入后不会自动计算。主表星级填 0-5；点击 ★ 录入库存会自动回填这件装备的最高可达星级。完成后请点击页面底部“计算”。</div>
+      </section>
+
+      <details class="card group" id="lockGroup">
+        <summary><span>锁定穿戴</span><span class="summary-right">可锁定某部位必须穿某套装备；胸和手镯可锁定 70B</span></summary>
+        <div class="group-body">
+          <div class="lock-grid" id="lockBar"></div>
+        </div>
+      </details>
+
+      <details class="card group" id="currentGroup">
+        <summary><span>当前穿戴和抗魔值录入</span><span class="summary-right">点开后可录入当前穿戴的装备、星级和角色总抗魔</span></summary>
+        <div class="group-body current-panel">
+          <div class="current-top">
+            <div class="score-box">
+              <label for="currentScoreInput">角色总抗魔</label>
+              <input id="currentScoreInput" class="score-input" type="number" min="0" step="1" inputmode="numeric" placeholder="不填或填 0 则不显示更换装备后的最终抗魔">
+            </div>
+            <div class="summary-row" id="currentSummary"></div>
+          </div>
+          <div class="current-grid" id="currentWearBar"></div>
+        </div>
+      </details>
+
+      <section class="card table-card">
+        <div class="table-top">星级填 0-5；点击 ★ 录入库存自动回填最高星级。</div>
+        <div class="table-wrap" id="tableWrap">
+          <table>
+            <thead id="mainTableHead"><tr id="headRow"></tr></thead>
+            <tbody id="bodyRows"></tbody>
+          </table>
+        </div>
+        <div class="table-actions">
+          <button id="importBtn" type="button">批量导入数据</button>
+          <button id="exportBtn" type="button">导出数据</button>
+        </div>
+      </section>
+
+      <section class="card calc-bar">
+        <button id="calculateBtn" type="button">计算</button>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="resultsTabPanel">
+      <section class="card">
+        <div class="status" id="resultStatusBox"><div class="result-status-inline"><span>请点击计算</span><button type="button" class="inline-calc-btn" data-role="result-calc-btn">计算</button></div></div>
+      </section>
+      <section class="results-wrap" id="resultsBox"></section>
+    </section>
+  </div>
+
+<div class="floating-head" id="floatingTableHead" aria-hidden="true">
+    <div class="floating-head-inner">
+      <div class="floating-head-scroll" id="floatingTableScroll">
+        <table aria-hidden="true"><thead><tr id="floatingHeadRow"></tr></thead></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="inventoryModal">
+    <div class="modal-card">
+      <h3 class="modal-title" id="modalTitle">库存录入</h3>
+      <p class="modal-sub">输入该件装备当前拥有的 1 星到 5 星数量。系统会按“2 个同星级合成 1 个下一星级”自动递推，并把这件装备的最高可达星级回填到表格中。</p>
+      <div class="modal-grid" id="modalGrid"></div>
+      <div class="modal-bottom">
+        <div class="preview" id="modalPreview"></div>
+        <div class="modal-actions">
+          <button type="button" id="modalCancel">取消</button>
+          <button type="button" class="primary" id="modalConfirm">确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="importModal">
+    <div class="modal-card import-card">
+      <h3 class="modal-title">批量导入数据</h3>
+      <p class="modal-sub">每行输入 1 套，格式为“套装名 + 11 位数字”。11 位数字按主表列顺序依次对应：胸、腿、肩、腰、鞋、项链、手镯、戒指、辅助装备、魔法石、耳环。支持“万灵11111111111”和“万灵 11111111111”两种写法。</p>
+      <textarea id="importTextarea" class="import-textarea" spellcheck="false"></textarea>
+      <div class="import-order">默认模板会按顺序给出：万灵、永恒、残夜、复苏、冰川、纵横、凌云、星辰、万世、天劫、暗夜、时光、逝魔、铁马、上元。确认导入后会直接回填主表，并同步清空原有库存记录。</div>
+      <div class="modal-bottom">
+        <div class="preview" id="importPreview">请检查每行是否都带 11 位数字。</div>
+        <div class="modal-actions">
+          <button type="button" id="copyTemplateBtn">复制模板</button>
+          <button type="button" id="importCancel">取消</button>
+          <button type="button" class="primary" id="importConfirm">确认导入</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="exportModal">
+    <div class="modal-card import-card">
+      <h3 class="modal-title">导出数据</h3>
+      <p class="modal-sub">导出内容与批量导入格式一致，每行 1 套，格式为“套装名 + 11 位数字”。可直接复制后作为备份或再次导入。</p>
+      <textarea id="exportTextarea" class="import-textarea" spellcheck="false" readonly></textarea>
+      <div class="modal-bottom">
+        <div class="preview" id="exportPreview">可直接复制当前列表数据。</div>
+        <div class="modal-actions">
+          <button type="button" id="exportCopyBtn">复制数据</button>
+          <button type="button" class="primary" id="exportCloseBtn">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="cacheModal">
+    <div class="modal-card import-card">
+      <h3 class="modal-title">保存数据到缓存</h3>
+      <p class="modal-sub">可在本地缓存中保存最多 10 套数据。每个缓存位都可以保存当前整页数据，也可以读取或删除。</p>
+      <div class="cache-slots" id="cacheSlots"></div>
+      <div class="modal-bottom">
+        <div class="preview" id="cachePreview">请选择一个缓存位进行保存、读取或删除。</div>
+        <div class="modal-actions">
+          <button type="button" class="primary" id="cacheCloseBtn">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const SUITS = ['万灵','永恒','残夜','复苏','冰川','纵横','凌云','星辰','万世','天劫','暗夜','时光','逝魔','铁马','上元'];
+  const SUIT_LABELS = SUITS.map(s => s.slice(0, 2));
+  const SUIT_NAME_CLASS = Object.fromEntries(SUITS.map((name, index) => [index, ({'万灵':'suit-green','星辰':'suit-green','天劫':'suit-green','暗夜':'suit-red','逝魔':'suit-red'})[name] || '']));
+  const PARTS = ['胸','腿','肩','腰','鞋','项链','手镯','戒指','辅助装备','魔法石','耳环'];
+  const PART_INDEX = Object.fromEntries(PARTS.map((p, i) => [p, i]));
+  const CURRENT_WEAR_ORDER = ['肩','胸','腿','腰','鞋','手镯','项链','戒指','辅助装备','魔法石','耳环'].map(part => PART_INDEX[part]);
+  const SPECIAL_PARTS = new Set(['胸', '耳环']);
+  const STAR_VALUES = {
+    special: {1:6665,2:7417,3:8170,4:8922,5:9675},
+    normal: {1:5805,2:6557,3:7310,4:8062,5:8815}
+  };
+  const BONUS_THRESHOLDS = [2,5,8,11];
+  const BONUS_TABLE = {
+    1:{2:2200,5:3400,8:4400,11:4600},
+    2:{2:2400,5:3800,8:4800,11:5000},
+    3:{2:2600,5:4200,8:5200,11:5400},
+    4:{2:2800,5:4600,8:5600,11:5800},
+    5:{2:3000,5:5000,8:6000,11:6200}
+  };
+  const B70_OPTIONS = [
+    {partIndex: PART_INDEX['胸'], token: 'b70:chest', label: '70B', resultLabel: '胸70B', score: 10520},
+    {partIndex: PART_INDEX['手镯'], token: 'b70:bracelet', label: '70B', resultLabel: '手镯70B', score: 9520}
+  ];
+  const B70_BY_PART = Object.fromEntries(B70_OPTIONS.map(v => [v.partIndex, v]));
+  const TOP_K = 5;
+  const FULL_MASK = (1 << PARTS.length) - 1;
+  const STORAGE_KEY = 'equipment_planner_final_v20260324_top5';
+  const CACHE_STORAGE_KEY = 'equipment_planner_cache_slots_v20260324_top10';
+  const CACHE_SLOT_COUNT = 10;
+
+  const headRow = document.getElementById('headRow');
+  const floatingHeadRow = document.getElementById('floatingHeadRow');
+  const bodyRows = document.getElementById('bodyRows');
+  const lockBar = document.getElementById('lockBar');
+  const currentWearBar = document.getElementById('currentWearBar');
+  const currentSummary = document.getElementById('currentSummary');
+  const currentScoreInput = document.getElementById('currentScoreInput');
+  const resultsBox = document.getElementById('resultsBox');
+  const statusBox = document.getElementById('statusBox');
+  const tableWrap = document.getElementById('tableWrap');
+  const mainTableHead = document.getElementById('mainTableHead');
+  const floatingTableHead = document.getElementById('floatingTableHead');
+  const floatingTableScroll = document.getElementById('floatingTableScroll');
+  const inputTabBtn = document.getElementById('inputTabBtn');
+  const resultsTabBtn = document.getElementById('resultsTabBtn');
+  const inputTabPanel = document.getElementById('inputTabPanel');
+  const resultsTabPanel = document.getElementById('resultsTabPanel');
+  const resultStatusBox = document.getElementById('resultStatusBox');
+  const randomBtn = document.getElementById('randomBtn');
+  const importBtn = document.getElementById('importBtn');
+  const clearTableBtn = document.getElementById('clearTableBtn');
+  const clearLocksBtn = document.getElementById('clearLocksBtn');
+  const clearCurrentBtn = document.getElementById('clearCurrentBtn');
+  const cacheBtn = document.getElementById('cacheBtn');
+  const calculateBtn = document.getElementById('calculateBtn');
+  const inventoryModal = document.getElementById('inventoryModal');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalGrid = document.getElementById('modalGrid');
+  const modalPreview = document.getElementById('modalPreview');
+  const modalCancel = document.getElementById('modalCancel');
+  const modalConfirm = document.getElementById('modalConfirm');
+  const importModal = document.getElementById('importModal');
+  const importTextarea = document.getElementById('importTextarea');
+  const importPreview = document.getElementById('importPreview');
+  const copyTemplateBtn = document.getElementById('copyTemplateBtn');
+  const importCancel = document.getElementById('importCancel');
+  const importConfirm = document.getElementById('importConfirm');
+  const exportBtn = document.getElementById('exportBtn');
+  const exportModal = document.getElementById('exportModal');
+  const exportTextarea = document.getElementById('exportTextarea');
+  const exportPreview = document.getElementById('exportPreview');
+  const exportCopyBtn = document.getElementById('exportCopyBtn');
+  const exportCloseBtn = document.getElementById('exportCloseBtn');
+  const cacheModal = document.getElementById('cacheModal');
+  const cacheSlots = document.getElementById('cacheSlots');
+  const cachePreview = document.getElementById('cachePreview');
+  const cacheCloseBtn = document.getElementById('cacheCloseBtn');
+
+  let inventoryEditing = null;
+  let state = loadState();
+  let cacheSlotState = loadCacheSlots();
+
+  function defaultMatrix(){ return SUITS.map(() => PARTS.map(() => 0)); }
+  function getSuitLabelHtml(suitIndex, full = false){
+    const text = full ? SUITS[suitIndex] : SUIT_LABELS[suitIndex];
+    const cls = SUIT_NAME_CLASS[suitIndex];
+    return cls ? `<span class="suit-name ${cls}">${text}</span>` : text;
+  }
+  function defaultInventory(){ return SUITS.map(() => PARTS.map(() => ({1:0,2:0,3:0,4:0,5:0}))); }
+  function defaultLocks(){ return PARTS.map(() => null); }
+  function defaultCurrentWear(){ return PARTS.map(() => ({type:'', suitIndex:null, b70Token:'', star:0})); }
+  function clampInt(value, min, max){ const n = Number.parseInt(value, 10); if(Number.isNaN(n)) return min; return Math.min(max, Math.max(min, n)); }
+
+  function switchTab(tab){
+    const showInput = tab !== 'results';
+    inputTabBtn.classList.toggle('active', showInput);
+    resultsTabBtn.classList.toggle('active', !showInput);
+    inputTabPanel.classList.toggle('active', showInput);
+    resultsTabPanel.classList.toggle('active', !showInput);
+    if(!showInput) updateFloatingHeaderVisibility();
+  }
+  function setResultStatus(message, isError = false){
+    resultStatusBox.textContent = message;
+    resultStatusBox.className = `status${isError ? ' error' : ''}`;
+  }
+  function renderResultCalcPrompt(){
+    resultStatusBox.innerHTML = '<div class="result-status-inline"><span>请点击计算</span><button type="button" class="inline-calc-btn" data-role="result-calc-btn">计算</button></div>';
+    resultStatusBox.className = 'status';
+  }
+  function markDirty(message){
+    renderHead();
+    renderLockBar();
+    renderCurrentPanel();
+    renderTable({});
+    resultsBox.innerHTML = '';
+    bindDynamicEvents();
+    setStatus(message || '输入已更新。修改后不会自动计算，请点击页面底部“计算”。');
+    renderResultCalcPrompt();
+    updateFloatingHeaderVisibility();
+  }
+
+  function loadState(){
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      return {
+        stars: sanitizeMatrix(raw.stars),
+        inventory: sanitizeInventory(raw.inventory),
+        locks: sanitizeLocks(raw.locks),
+        currentScore: sanitizeCurrentScore(raw.currentScore),
+        currentWear: sanitizeCurrentWear(raw.currentWear)
+      };
+    } catch {
+      return {stars:defaultMatrix(), inventory:defaultInventory(), locks:defaultLocks(), currentScore:'', currentWear:defaultCurrentWear()};
+    }
+  }
+  function sanitizeMatrix(v){
+    const base = defaultMatrix();
+    if(!Array.isArray(v)) return base;
+    return base.map((row, i) => row.map((_, j) => clampInt(v?.[i]?.[j] ?? 0, 0, 5)));
+  }
+  function sanitizeInventory(v){
+    const base = defaultInventory();
+    if(!Array.isArray(v)) return base;
+    return base.map((row, i) => row.map((_, j) => {
+      const src = v?.[i]?.[j] || {};
+      return {1:clampInt(src[1] ?? src['1'] ?? 0, 0, 999999),2:clampInt(src[2] ?? src['2'] ?? 0, 0, 999999),3:clampInt(src[3] ?? src['3'] ?? 0, 0, 999999),4:clampInt(src[4] ?? src['4'] ?? 0, 0, 999999),5:clampInt(src[5] ?? src['5'] ?? 0, 0, 999999)};
+    }));
+  }
+  function sanitizeLocks(v){
+    const base = defaultLocks();
+    if(!Array.isArray(v)) return base;
+    return base.map((_, partIndex) => normalizeLockValue(partIndex, v[partIndex]));
+  }
+  function sanitizeCurrentWear(v){
+    const base = defaultCurrentWear();
+    if(!Array.isArray(v)) return base;
+    return base.map((_, partIndex) => {
+      const src = v[partIndex] || {};
+      if(src.type === 'b70' && B70_BY_PART[partIndex] && B70_BY_PART[partIndex].token === src.b70Token){
+        return {type:'b70', suitIndex:null, b70Token:src.b70Token, star:0};
+      }
+      const suitIndex = Number.isInteger(src.suitIndex) && src.suitIndex >= 0 && src.suitIndex < SUITS.length ? src.suitIndex : null;
+      const type = src.type === 'suit' && suitIndex !== null ? 'suit' : '';
+      return {type, suitIndex, b70Token:'', star: clampInt(src.star ?? 0, 0, 5)};
+    });
+  }
+  function sanitizeCurrentScore(v){ if(v === '' || v === null || v === undefined) return ''; return String(clampInt(v, 0, 999999999)); }
+  function saveState(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+  function defaultCacheSlots(){ return Array.from({length:CACHE_SLOT_COUNT}, () => null); }
+  function sanitizeStateSnapshot(raw){
+    const src = raw?.data || raw || {};
+    return {
+      stars: sanitizeMatrix(src.stars),
+      inventory: sanitizeInventory(src.inventory),
+      locks: sanitizeLocks(src.locks),
+      currentScore: sanitizeCurrentScore(src.currentScore),
+      currentWear: sanitizeCurrentWear(src.currentWear)
+    };
+  }
+  function loadCacheSlots(){
+    try {
+      const raw = JSON.parse(localStorage.getItem(CACHE_STORAGE_KEY) || '[]');
+      if(!Array.isArray(raw)) return defaultCacheSlots();
+      return Array.from({length:CACHE_SLOT_COUNT}, (_, index) => {
+        const item = raw[index];
+        if(!item || typeof item !== 'object') return null;
+        return {savedAt: typeof item.savedAt === 'string' ? item.savedAt : '', data: sanitizeStateSnapshot(item)};
+      });
+    } catch {
+      return defaultCacheSlots();
+    }
+  }
+  function saveCacheSlots(){
+    localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(cacheSlotState));
+  }
+  function cloneCurrentState(){
+    return sanitizeStateSnapshot(JSON.parse(JSON.stringify(state)));
+  }
+
+  function normalizeLockValue(partIndex, value){
+    if(!value) return null;
+    if(typeof value === 'object' && value){
+      if(value.type === 'b70' && B70_BY_PART[partIndex] && B70_BY_PART[partIndex].token === value.token){
+        return {type:'b70', token:value.token, option:B70_BY_PART[partIndex]};
+      }
+      if(value.type === 'suit' && Number.isInteger(value.suitIndex) && value.suitIndex >= 0 && value.suitIndex < SUITS.length){
+        return {type:'suit', suitIndex:value.suitIndex};
+      }
+      return null;
+    }
+    if(typeof value === 'string'){
+      if(value.startsWith('s:')){
+        const suitIndex = clampInt(value.slice(2), -1, SUITS.length - 1);
+        return suitIndex >= 0 ? {type:'suit', suitIndex} : null;
+      }
+      if(B70_BY_PART[partIndex] && value === B70_BY_PART[partIndex].token){
+        return {type:'b70', token:value, option:B70_BY_PART[partIndex]};
+      }
+    }
+    return null;
+  }
+  function getLockInfo(partIndex){ return state.locks[partIndex] || null; }
+  function getPartScore(partIndex, star){
+    const level = clampInt(star, 0, 5);
+    if(level <= 0) return 0;
+    return SPECIAL_PARTS.has(PARTS[partIndex]) ? STAR_VALUES.special[level] : STAR_VALUES.normal[level];
+  }
+  function computeBonusForStars(stars){
+    if(!stars.length) return {bonus:0, details:[]};
+    const sorted = [...stars].sort((a,b) => b - a);
+    let total = 0;
+    const details = [];
+    for(const threshold of BONUS_THRESHOLDS){
+      if(sorted.length >= threshold){
+        const tierStar = sorted[threshold - 1];
+        const bonus = BONUS_TABLE[tierStar]?.[threshold] || 0;
+        total += bonus;
+        details.push({threshold, tierStar, bonus});
+      }
+    }
+    return {bonus: total, details};
+  }
+  function computeHighestStarFromCounts(counts){
+    const pool = {1:counts[1]||0,2:counts[2]||0,3:counts[3]||0,4:counts[4]||0,5:counts[5]||0};
+    for(let star = 1; star < 5; star++){
+      const up = Math.floor(pool[star] / 2);
+      pool[star] = pool[star] % 2;
+      pool[star + 1] += up;
+    }
+    let maxStar = 0;
+    for(let star = 5; star >= 1; star--) if(pool[star] > 0){ maxStar = star; break; }
+    return {pool, maxStar};
+  }
+
+  function renderHead(){
+    const headerHtml = ['<th></th>'].concat(PARTS.map((part, partIndex) => {
+      const lockInfo = getLockInfo(partIndex);
+      const active = lockInfo && lockInfo.type === 'b70';
+      return `<th class="${active ? 'part70b-head' : ''}">${part}${active ? '<span class="th-sub">70B锁定</span>' : ''}</th>`;
+    })).join('');
+    headRow.innerHTML = headerHtml;
+    floatingHeadRow.innerHTML = headerHtml;
+  }
+
+  function renderLockBar(){
+    lockBar.innerHTML = PARTS.map((part, partIndex) => {
+      const lockInfo = getLockInfo(partIndex);
+      const current = lockInfo?.type === 'suit' ? `s:${lockInfo.suitIndex}` : (lockInfo?.type === 'b70' ? lockInfo.token : '');
+      const options = ['<option value="">不锁</option>']
+        .concat(B70_BY_PART[partIndex] ? [`<option value="${B70_BY_PART[partIndex].token}">70B</option>`] : [])
+        .concat(SUITS.map((_, suitIndex) => `<option value="s:${suitIndex}">${SUIT_LABELS[suitIndex]}</option>`))
+        .join('');
+      return `<div class="lock-item"><label>${part}</label><select class="lock-select" data-part="${partIndex}">${options}</select></div>`;
+    }).join('');
+    lockBar.querySelectorAll('.lock-select').forEach(select => {
+      const partIndex = Number(select.dataset.part);
+      const lockInfo = getLockInfo(partIndex);
+      select.value = lockInfo?.type === 'suit' ? `s:${lockInfo.suitIndex}` : (lockInfo?.type === 'b70' ? lockInfo.token : '');
+      select.onchange = event => {
+        const idx = Number(event.target.dataset.part);
+        state.locks[idx] = normalizeLockValue(idx, event.target.value);
+        saveState();
+        markDirty('锁定已更新，请点击页面底部“计算”。');
+      };
+    });
+  }
+
+  function renderCurrentPanel(){
+    currentScoreInput.value = state.currentScore;
+    currentWearBar.innerHTML = CURRENT_WEAR_ORDER.map(partIndex => {
+      const part = PARTS[partIndex];
+      const curr = state.currentWear[partIndex];
+      const options = ['<option value=""></option>']
+        .concat(B70_BY_PART[partIndex] ? [`<option value="${B70_BY_PART[partIndex].token}">70B</option>`] : [])
+        .concat(SUITS.map((_, suitIndex) => `<option value="s:${suitIndex}">${SUIT_LABELS[suitIndex]}</option>`))
+        .join('');
+      return `<div class="current-item">
+        <label>${part}</label>
+        <div class="current-controls">
+          <select class="current-select" data-part="${partIndex}">${options}</select>
+          <select class="current-star" data-star-part="${partIndex}">
+            <option value="0">-</option>
+            <option value="1">1星</option>
+            <option value="2">2星</option>
+            <option value="3">3星</option>
+            <option value="4">4星</option>
+            <option value="5">5星</option>
+          </select>
+        </div>
+      </div>`;
+    }).join('');
+    currentWearBar.querySelectorAll('.current-select').forEach(select => {
+      const partIndex = Number(select.dataset.part);
+      const curr = state.currentWear[partIndex];
+      select.value = curr.type === 'suit' ? `s:${curr.suitIndex}` : (curr.type === 'b70' ? curr.b70Token : '');
+      select.onchange = event => {
+        const idx = Number(event.target.dataset.part);
+        const value = event.target.value;
+        if(!value){ state.currentWear[idx] = {type:'', suitIndex:null, b70Token:'', star:0}; }
+        else if(value.startsWith('s:')){ state.currentWear[idx] = {type:'suit', suitIndex:clampInt(value.slice(2),0,SUITS.length-1), b70Token:'', star:Math.max(1, state.currentWear[idx].star || 1)}; }
+        else { state.currentWear[idx] = {type:'b70', suitIndex:null, b70Token:value, star:0}; }
+        saveState();
+        markDirty('当前穿戴已更新，请点击页面底部“计算”。');
+      };
+    });
+    currentWearBar.querySelectorAll('.current-star').forEach(select => {
+      const partIndex = Number(select.dataset.starPart);
+      const curr = state.currentWear[partIndex];
+      select.value = String(curr.type === 'suit' ? curr.star : 0);
+      if(curr.type !== 'suit') select.classList.add('hide');
+      select.onchange = event => {
+        const idx = Number(event.target.dataset.starPart);
+        state.currentWear[idx].star = clampInt(event.target.value, 0, 5);
+        saveState();
+        markDirty('当前穿戴星级已更新，请点击页面底部“计算”。');
+      };
+    });
+    currentScoreInput.oninput = event => {
+      const cleaned = String(event.target.value).replace(/[^\d]/g, '');
+      state.currentScore = cleaned === '' ? '' : String(clampInt(cleaned, 0, 999999999));
+      event.target.value = state.currentScore;
+      saveState();
+      markDirty('当前抗魔值已更新，请点击页面底部“计算”。');
+    };
+    const evalResult = evaluateCurrentWear();
+    currentSummary.innerHTML = [
+      `<div class="summary-card"><div class="summary-label">角色总抗魔</div><div class="summary-value">${state.currentScore === '' ? '-' : Number(state.currentScore).toLocaleString()}</div></div>`,
+      `<div class="summary-card"><div class="summary-label">当前装备奖励抗魔</div><div class="summary-value">${evalResult.total.toLocaleString()}</div></div>`,
+      `<div class="summary-card"><div class="summary-label">非装备抗魔</div><div class="summary-value">${evalResult.nonEquipDisplay}</div></div>`
+    ].join('');
+    return evalResult;
+  }
+
+  function evaluateCurrentWear(){
+    const starsBySuit = Array.from({length: SUITS.length}, () => []);
+    let base = 0;
+    for(let partIndex = 0; partIndex < PARTS.length; partIndex++){
+      const curr = state.currentWear[partIndex];
+      if(curr.type === 'b70'){
+        base += B70_BY_PART[partIndex]?.score || 0;
+      } else if(curr.type === 'suit' && curr.suitIndex !== null && curr.star > 0){
+        base += getPartScore(partIndex, curr.star);
+        starsBySuit[curr.suitIndex].push(curr.star);
+      }
+    }
+    let bonus = 0;
+    const bonusDetails = [];
+    for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
+      const res = computeBonusForStars(starsBySuit[suitIndex]);
+      bonus += res.bonus;
+      res.details.forEach(d => bonusDetails.push(`${SUIT_LABELS[suitIndex]} ${d.threshold}件${d.tierStar}星 +${d.bonus.toLocaleString()}`));
+    }
+    const total = base + bonus;
+    const currentScoreNum = state.currentScore === '' ? 0 : clampInt(state.currentScore, 0, 999999999);
+    const hasCurrentScore = currentScoreNum > 0;
+    return {
+      base, bonus, total, bonusDetails,
+      currentScoreNum,
+      nonEquip: hasCurrentScore ? currentScoreNum - total : null,
+      nonEquipDisplay: hasCurrentScore ? (currentScoreNum - total).toLocaleString() : '-'
+    };
+  }
+
+  function renderTable(highlightMap = {}){
+    bodyRows.innerHTML = SUITS.map((_, suitIndex) => {
+      const cols = PARTS.map((__, partIndex) => {
+        const key = `${suitIndex}-${partIndex}`;
+        const ranks = highlightMap[key] || [];
+        const lockInfo = getLockInfo(partIndex);
+        const lockedChoice = lockInfo?.type === 'suit' && lockInfo.suitIndex === suitIndex;
+        const use70B = lockInfo?.type === 'b70';
+        const tdClass = [ranks.length ? `rank${Math.min(...ranks)}` : '', use70B ? 'part70b' : '', lockedChoice ? 'locked-choice' : ''].filter(Boolean).join(' ');
+        const inv = state.inventory[suitIndex][partIndex];
+        const hasInventory = [1,2,3,4,5].some(s => (inv[s] || 0) > 0);
+        const badges = ranks.map(rank => `<span class="badge b${rank}">${rank}</span>`).join('');
+        const badgesClass = `badges${ranks.length > 3 ? ' badges-crowded' : ''}`;
+        return `<td class="${tdClass}"><div class="cell"><input class="star-input" type="number" min="0" max="5" step="1" inputmode="numeric" value="${state.stars[suitIndex][partIndex]}" data-suit="${suitIndex}" data-part="${partIndex}"><button class="mini ${hasInventory ? 'active' : ''}" type="button" data-action="inventory" data-suit="${suitIndex}" data-part="${partIndex}" tabindex="-1">★</button><div class="${badgesClass}">${badges}</div></div></td>`;
+      }).join('');
+      return `<tr><th>${getSuitLabelHtml(suitIndex)}</th>${cols}</tr>`;
+    }).join('');
+  }
+
+  function buildAllowedMatrix(){
+    const fixedB70 = Array(PARTS.length).fill(false);
+    const allowed = SUITS.map((_, suitIndex) => PARTS.map((__, partIndex) => getPartScore(partIndex, state.stars[suitIndex][partIndex]) > 0));
+    for(let partIndex = 0; partIndex < PARTS.length; partIndex++){
+      const lockInfo = getLockInfo(partIndex);
+      if(!lockInfo) continue;
+      if(lockInfo.type === 'b70'){
+        fixedB70[partIndex] = true;
+        for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++) allowed[suitIndex][partIndex] = false;
+        continue;
+      }
+      if(lockInfo.type === 'suit'){
+        if(!allowed[lockInfo.suitIndex][partIndex]){
+          return {error:`部位“${PARTS[partIndex]}”被锁定到“${SUIT_LABELS[lockInfo.suitIndex]}”，但该件装备星级为 0，无法穿戴。`};
+        }
+        for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++) allowed[suitIndex][partIndex] = suitIndex === lockInfo.suitIndex && allowed[suitIndex][partIndex];
+      }
+    }
+    for(let partIndex = 0; partIndex < PARTS.length; partIndex++){
+      if(fixedB70[partIndex]) continue;
+      let any = false;
+      for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++) if(allowed[suitIndex][partIndex]) { any = true; break; }
+      if(!any) return {error:`部位“${PARTS[partIndex]}”当前没有可穿装备，请至少录入 1 件星级大于 0 的装备，或者锁定 70B。`};
+    }
+    return {allowed, fixedB70};
+  }
+
+  function precomputeSubsetScores(allowed, remainingMask){
+    const subsetScores = Array.from({length: SUITS.length}, () => Array(1 << PARTS.length).fill(Number.NEGATIVE_INFINITY));
+    for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
+      subsetScores[suitIndex][0] = 0;
+      for(let submask = remainingMask; ; submask = (submask - 1) & remainingMask){
+        if(submask !== 0){
+          let base = 0; let feasible = true; const stars = [];
+          for(let partIndex = 0; partIndex < PARTS.length; partIndex++) if((submask >> partIndex) & 1){
+            if(!allowed[suitIndex][partIndex]){ feasible = false; break; }
+            const star = state.stars[suitIndex][partIndex];
+            base += getPartScore(partIndex, star);
+            stars.push(star);
+          }
+          if(feasible){ subsetScores[suitIndex][submask] = base + computeBonusForStars(stars).bonus; }
+        }
+        if(submask === 0) break;
+      }
+    }
+    return subsetScores;
+  }
+
+  function pushTopK(arr, entry){ arr.push(entry); arr.sort((a,b) => b.score - a.score); if(arr.length > TOP_K) arr.length = TOP_K; }
+
+  function reconstructPlan(dp, finalEntry, finalRankIndex, fixedB70){
+    const assignment = Array(PARTS.length).fill(-1);
+    const fixedB70Map = Array(PARTS.length).fill(false);
+    let suitLayer = SUITS.length;
+    let entry = finalEntry;
+    while(suitLayer > 0){
+      const suitIndex = suitLayer - 1;
+      for(let partIndex = 0; partIndex < PARTS.length; partIndex++) if((entry.submask >> partIndex) & 1) assignment[partIndex] = suitIndex;
+      const prevMask = entry.prevMask;
+      const prevRank = entry.prevRank;
+      suitLayer--;
+      if(prevMask === null) break;
+      entry = dp[suitLayer][prevMask][prevRank];
+    }
+    let baseScore = 0;
+    const counts = Array(SUITS.length).fill(0);
+    const starsBySuit = Array.from({length: SUITS.length}, () => []);
+    for(let partIndex = 0; partIndex < PARTS.length; partIndex++){
+      if(fixedB70[partIndex]){
+        fixedB70Map[partIndex] = true;
+        baseScore += B70_BY_PART[partIndex].score;
+        continue;
+      }
+      const suitIndex = assignment[partIndex];
+      const star = state.stars[suitIndex][partIndex];
+      counts[suitIndex]++;
+      starsBySuit[suitIndex].push(star);
+      baseScore += getPartScore(partIndex, star);
+    }
+    let bonusScore = 0; const bonusDetails = [];
+    for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
+      const res = computeBonusForStars(starsBySuit[suitIndex]);
+      bonusScore += res.bonus;
+      res.details.forEach(d => bonusDetails.push(`${SUIT_LABELS[suitIndex]} ${d.threshold}件${d.tierStar}星 +${d.bonus.toLocaleString()}`));
+    }
+    return {totalScore: baseScore + bonusScore, baseScore, bonusScore, counts, assignment, fixedB70: fixedB70Map, bonusDetails};
+  }
+
+  function computeTopPlans(){
+    const allowedResult = buildAllowedMatrix();
+    if(allowedResult.error) return {error: allowedResult.error};
+    const {allowed, fixedB70} = allowedResult;
+    let fixedBase = 0; let fixedMask = 0;
+    for(const option of B70_OPTIONS){ if(fixedB70[option.partIndex]){ fixedBase += option.score; fixedMask |= (1 << option.partIndex); } }
+    const remainingMask = FULL_MASK ^ fixedMask;
+    const subsetScores = precomputeSubsetScores(allowed, remainingMask);
+    const dp = Array.from({length: SUITS.length + 1}, () => Array.from({length: 1 << PARTS.length}, () => []));
+    dp[0][0] = [{score: 0, prevMask: null, prevRank: null, submask: 0}];
+    for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
+      for(let mask = 0; mask <= remainingMask; mask++){
+        const currentEntries = dp[suitIndex][mask];
+        if(!currentEntries.length) continue;
+        const remaining = remainingMask ^ mask;
+        for(let submask = remaining; ; submask = (submask - 1) & remaining){
+          const suitScore = subsetScores[suitIndex][submask];
+          if(Number.isFinite(suitScore)){
+            const nextMask = mask | submask;
+            currentEntries.forEach((entry, rankIndex) => pushTopK(dp[suitIndex + 1][nextMask], {score: entry.score + suitScore, prevMask: mask, prevRank: rankIndex, submask}));
+          }
+          if(submask === 0) break;
+        }
+      }
+    }
+    const finals = dp[SUITS.length][remainingMask];
+    if(!finals.length) return {error:'当前数据下找不到满足 11 个部位全都穿齐的方案。'};
+    const plans = finals.map((entry, idx) => {
+      const plan = reconstructPlan(dp, entry, idx, fixedB70);
+      plan.totalScore += fixedBase * 0; // fixedBase already included in reconstructPlan baseScore
+      return plan;
+    });
+    return {plans};
+  }
+
+  function buildHighlightMap(plans){
+    const map = {};
+    plans.forEach((plan, index) => {
+      const rank = index + 1;
+      plan.assignment.forEach((suitIndex, partIndex) => {
+        if(plan.fixedB70[partIndex]) return;
+        const key = `${suitIndex}-${partIndex}`;
+        if(!map[key]) map[key] = [];
+        map[key].push(rank);
+      });
+    });
+    return map;
+  }
+
+  function renderPlanRow(plan, currentEval){
+    const grouped = [];
+    for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
+      const items = [];
+      for(let partIndex = 0; partIndex < PARTS.length; partIndex++){
+        if(plan.fixedB70[partIndex]) continue;
+        if(plan.assignment[partIndex] !== suitIndex) continue;
+        const star = state.stars[suitIndex][partIndex];
+        items.push(`${PARTS[partIndex]}${star}星`);
+      }
+      if(items.length){
+        grouped.push(`<span class="plan-group"><span class="group-name">${getSuitLabelHtml(suitIndex)}</span><span class="group-items">${items.join('、')}</span></span>`);
+      }
+    }
+    const b70Items = B70_OPTIONS.filter(option => plan.fixedB70[option.partIndex]).map(option => PARTS[option.partIndex]);
+    if(b70Items.length){
+      grouped.push(`<span class="plan-group"><span class="group-name">70B</span><span class="group-items">${b70Items.join('、')}</span></span>`);
+    }
+    const showFinal = currentEval.currentScoreNum > 0;
+    const finalScore = showFinal ? (currentEval.currentScoreNum + plan.totalScore - currentEval.total) : null;
+    const finalPart = showFinal
+      ? `；更换装备后的最终抗魔：<span class="final-inline">${finalScore.toLocaleString()}</span>`
+      : '；更换装备后的最终抗魔：<span class="muted">未录入换装前角色总抗魔</span>';
+    return `<div class="result-lines">
+      <div class="result-line metrics">基础：${plan.baseScore.toLocaleString()}；加成：${plan.bonusScore.toLocaleString()}${finalPart}</div>
+      <div class="result-line plan"><div>穿戴方案：</div><div class="plan-group-list">${grouped.join('')}</div></div>
+    </div>`;
+  }
+
+  function getRankLabel(rank){
+    const labels = ['第一名','第二名','第三名','第四名','第五名'];
+    return labels[rank - 1] || `第${rank}名`;
+  }
+
+  function renderResults(plans, currentEval){
+    const blocks = [];
+    plans.forEach((plan, index) => {
+      const rank = index + 1;
+      const label = getRankLabel(rank);
+      blocks.push(`<details class="rank-card rank${rank}" open><summary><span class="summary-main">${label}：总抗魔 ${plan.totalScore.toLocaleString()}</span><span class="summary-right">点击展开</span></summary><div class="rank-body">${renderPlanRow(plan, currentEval)}</div></details>`);
+    });
+    resultsBox.innerHTML = blocks.join('');
+  }
+
+  function setStatus(message, isError = false){
+    statusBox.textContent = message;
+    statusBox.className = `status${isError ? ' error' : ''}`;
+  }
+
+  function getAllStarInputs(){ return Array.from(document.querySelectorAll('.star-input')); }
+  function focusNextStarInput(currentInput, reverse = false){
+    const inputs = getAllStarInputs();
+    const currentIndex = inputs.indexOf(currentInput);
+    if(currentIndex < 0) return;
+    const delta = reverse ? -1 : 1;
+    const nextIndex = (currentIndex + delta + inputs.length) % inputs.length;
+    const nextInput = inputs[nextIndex];
+    if(nextInput){ nextInput.focus(); nextInput.select(); }
+  }
+  function bindDynamicEvents(){
+    document.querySelectorAll('.star-input').forEach(input => {
+      input.oninput = event => {
+        const suitIndex = Number(event.target.dataset.suit);
+        const partIndex = Number(event.target.dataset.part);
+        const sanitized = String(event.target.value).replace(/[^\d]/g, '').slice(-1);
+        if(sanitized === ''){
+          state.stars[suitIndex][partIndex] = 0;
+          event.target.value = '';
+          saveState();
+          markDirty();
+          return;
+        }
+        const value = clampInt(sanitized, 0, 5);
+        state.stars[suitIndex][partIndex] = value;
+        event.target.value = value;
+        saveState();
+        markDirty();
+        setTimeout(() => focusNextStarInput(event.target), 0);
+      };
+      input.onkeydown = event => {
+        if(event.key === 'Tab'){
+          event.preventDefault();
+          focusNextStarInput(event.target, event.shiftKey);
+        }
+        if(event.key === 'ArrowUp' || event.key === 'ArrowDown') event.preventDefault();
+      };
+      input.onfocus = event => event.target.select();
+    });
+    document.querySelectorAll('[data-action="inventory"]').forEach(btn => {
+      btn.onclick = event => openInventoryModal(Number(event.currentTarget.dataset.suit), Number(event.currentTarget.dataset.part));
+    });
+  }
+
+  function getModalCounts(){
+    const counts = {1:0,2:0,3:0,4:0,5:0};
+    modalGrid.querySelectorAll('[data-star]').forEach(input => {
+      const star = Number(input.dataset.star);
+      const cleaned = String(input.value).replace(/[^\d]/g, '');
+      const value = clampInt(cleaned === '' ? 0 : cleaned, 0, 999999);
+      input.value = value;
+      counts[star] = value;
+    });
+    return counts;
+  }
+  function refreshModalPreview(){
+    const result = computeHighestStarFromCounts(getModalCounts());
+    modalPreview.textContent = `最高可达：${result.maxStar}星`;
+  }
+  function getImportRowString(suitIndex){
+    return `${SUITS[suitIndex]}${state.stars[suitIndex].map(v => clampInt(v, 0, 5)).join('')}`;
+  }
+  function getImportNameTemplate(){
+    return SUITS.join('\n');
+  }
+  function getImportTemplate(){
+    const hasAnyValue = state.stars.some(row => row.some(v => clampInt(v, 0, 5) > 0));
+    return SUITS.map((_, suitIndex) => hasAnyValue ? getImportRowString(suitIndex) : SUITS[suitIndex]).join('\n');
+  }
+  function getExportText(){
+    return SUITS.map((_, suitIndex) => getImportRowString(suitIndex)).join('\n');
+  }
+  function isProbablyMobile(){
+    return /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(navigator.userAgent || '');
+  }
+  async function copyText(text){
+    const value = String(text ?? '');
+    if(navigator.clipboard && typeof navigator.clipboard.writeText === 'function'){
+      try {
+        await navigator.clipboard.writeText(value);
+        return {mode:'clipboard'};
+      } catch {}
+    }
+
+    const activeElement = document.activeElement;
+    const helper = document.createElement('textarea');
+    helper.value = value;
+    helper.readOnly = false;
+    helper.setAttribute('aria-hidden', 'true');
+    helper.style.position = 'fixed';
+    helper.style.top = '16px';
+    helper.style.left = '16px';
+    helper.style.width = 'calc(100vw - 32px)';
+    helper.style.maxWidth = '420px';
+    helper.style.height = '120px';
+    helper.style.padding = '12px';
+    helper.style.border = '1px solid transparent';
+    helper.style.borderRadius = '12px';
+    helper.style.background = '#fff';
+    helper.style.color = 'transparent';
+    helper.style.caretColor = 'transparent';
+    helper.style.opacity = '0.01';
+    helper.style.zIndex = '99999';
+    helper.style.pointerEvents = 'none';
+    helper.style.whiteSpace = 'pre';
+    helper.style.fontSize = '16px';
+    document.body.appendChild(helper);
+
+    const selection = window.getSelection ? window.getSelection() : null;
+    const originalRanges = [];
+    if(selection && selection.rangeCount){
+      for(let i = 0; i < selection.rangeCount; i++) originalRanges.push(selection.getRangeAt(i).cloneRange());
+    }
+
+    let copied = false;
+    try {
+      helper.focus({preventScroll:true});
+      helper.select();
+      helper.setSelectionRange(0, helper.value.length);
+      copied = document.execCommand('copy');
+
+      if(!copied && selection){
+        const range = document.createRange();
+        range.selectNodeContents(helper);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        copied = document.execCommand('copy');
+      }
+    } catch {
+      copied = false;
+    }
+
+    helper.remove();
+    if(selection){
+      selection.removeAllRanges();
+      originalRanges.forEach(range => selection.addRange(range));
+    }
+    if(activeElement && typeof activeElement.focus === 'function'){
+      try { activeElement.focus({preventScroll:true}); } catch { try { activeElement.focus(); } catch {} }
+    }
+    if(copied) return {mode:'fallback'};
+
+    if(isProbablyMobile() && navigator.share){
+      try {
+        await navigator.share({text:value, title:'模板数据'});
+        return {mode:'share'};
+      } catch {}
+    }
+    throw new Error('copy failed');
+  }
+  function setImportPreview(message, isError = false){
+    importPreview.textContent = message;
+    importPreview.classList.toggle('error', !!isError);
+  }
+  function setExportPreview(message, isError = false){
+    exportPreview.textContent = message;
+    exportPreview.classList.toggle('error', !!isError);
+  }
+  function setCachePreview(message, isError = false){
+    cachePreview.textContent = message;
+    cachePreview.classList.toggle('error', !!isError);
+  }
+  function formatCacheTime(value){
+    if(!value) return '未保存';
+    const date = new Date(value);
+    if(Number.isNaN(date.getTime())) return value;
+    const pad = n => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  }
+  function countFilledCells(matrix){
+    return matrix.reduce((total, row) => total + row.filter(v => Number(v) > 0).length, 0);
+  }
+  function renderCacheSlots(){
+    cacheSlots.innerHTML = cacheSlotState.map((entry, index) => {
+      const filled = entry ? countFilledCells(entry.data.stars) : 0;
+      const currentScoreText = entry && String(entry.data.currentScore || '').trim() !== '' && Number(entry.data.currentScore) > 0 ? Number(entry.data.currentScore).toLocaleString() : '未录入';
+      const meta = entry
+        ? `保存时间：${formatCacheTime(entry.savedAt)}｜主表已填 ${filled}/${SUITS.length * PARTS.length} 格｜当前抗魔：${currentScoreText}`
+        : '当前为空，可把本页数据保存到这里。';
+      return `<div class="cache-slot${entry ? '' : ' empty'}">
+        <div class="cache-slot-top">
+          <div>
+            <div class="cache-slot-title">缓存 ${index + 1}</div>
+            <div class="cache-slot-meta">${meta}</div>
+          </div>
+          <div class="cache-slot-actions">
+            <button type="button" class="primary" data-cache-action="save" data-slot="${index}">保存到这里</button>
+            <button type="button" data-cache-action="load" data-slot="${index}" ${entry ? '' : 'disabled'}>读取</button>
+            <button type="button" data-cache-action="delete" data-slot="${index}" ${entry ? '' : 'disabled'}>删除</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    cacheSlots.querySelectorAll('[data-cache-action]').forEach(button => {
+      button.addEventListener('click', () => {
+        const slotIndex = Number(button.dataset.slot);
+        const action = button.dataset.cacheAction;
+        if(action === 'save') saveToCacheSlot(slotIndex);
+        if(action === 'load') loadFromCacheSlot(slotIndex);
+        if(action === 'delete') deleteCacheSlot(slotIndex);
+      });
+    });
+  }
+  function openCacheModal(){
+    renderCacheSlots();
+    setCachePreview('请选择一个缓存位进行保存、读取或删除。');
+    cacheModal.classList.add('show');
+  }
+  function closeCacheModal(){
+    cacheModal.classList.remove('show');
+  }
+  function saveToCacheSlot(slotIndex){
+    cacheSlotState[slotIndex] = {savedAt: new Date().toISOString(), data: cloneCurrentState()};
+    saveCacheSlots();
+    renderCacheSlots();
+    setCachePreview(`当前数据已保存到缓存 ${slotIndex + 1}。`);
+  }
+  function loadFromCacheSlot(slotIndex){
+    const entry = cacheSlotState[slotIndex];
+    if(!entry){
+      setCachePreview(`缓存 ${slotIndex + 1} 为空。`, true);
+      return;
+    }
+    state = sanitizeStateSnapshot(entry);
+    saveState();
+    closeCacheModal();
+    markDirty(`已读取缓存 ${slotIndex + 1}，请点击页面底部“计算”。`);
+  }
+  function deleteCacheSlot(slotIndex){
+    if(!cacheSlotState[slotIndex]){
+      setCachePreview(`缓存 ${slotIndex + 1} 为空。`, true);
+      return;
+    }
+    cacheSlotState[slotIndex] = null;
+    saveCacheSlots();
+    renderCacheSlots();
+    setCachePreview(`缓存 ${slotIndex + 1} 已删除。`);
+  }
+
+  function openImportModal(){
+    importTextarea.value = getImportTemplate();
+    setImportPreview('请检查每行是否都带 11 位数字。');
+    importModal.classList.add('show');
+    setTimeout(() => {
+      importTextarea.focus();
+      importTextarea.setSelectionRange(0, importTextarea.value.length);
+    }, 0);
+  }
+  function closeImportModal(){
+    importModal.classList.remove('show');
+  }
+  function openExportModal(){
+    exportTextarea.value = getExportText();
+    setExportPreview('可直接复制当前列表数据。');
+    exportModal.classList.add('show');
+    setTimeout(() => {
+      exportTextarea.focus();
+      exportTextarea.setSelectionRange(0, exportTextarea.value.length);
+    }, 0);
+  }
+  function closeExportModal(){
+    exportModal.classList.remove('show');
+  }
+  async function copyImportTemplate(){
+    try {
+      const result = await copyText(getImportNameTemplate());
+      if(result && result.mode === 'share'){
+        setImportPreview('已打开系统分享面板，请在手机上选择“复制”。');
+      } else {
+        setImportPreview('模板名称已复制，可直接粘贴后补 11 位数字。');
+      }
+    } catch {
+      setImportPreview('当前环境不支持直接复制，请长按文本框内容手动复制。', true);
+      importTextarea.value = getImportNameTemplate();
+      setTimeout(() => {
+        importTextarea.focus();
+        importTextarea.setSelectionRange(0, importTextarea.value.length);
+      }, 0);
+    }
+  }
+  async function copyExportText(){
+    try {
+      const text = getExportText();
+      exportTextarea.value = text;
+      const result = await copyText(text);
+      if(result && result.mode === 'share'){
+        setExportPreview('已打开系统分享面板，请在手机上选择“复制”。');
+      } else {
+        setExportPreview('当前列表数据已复制。');
+      }
+    } catch {
+      setExportPreview('当前环境不支持直接复制，请长按文本框内容手动复制。', true);
+      setTimeout(() => {
+        exportTextarea.focus();
+        exportTextarea.setSelectionRange(0, exportTextarea.value.length);
+      }, 0);
+    }
+  }
+  function parseImportText(text){
+    const lines = String(text).replace(/\r/g, '').split('\n').map(v => v.trim()).filter(Boolean);
+    if(!lines.length) return {error:'导入内容为空。'};
+    const parsed = defaultMatrix();
+    const seen = new Set();
+    for(let i = 0; i < lines.length; i++){
+      const compact = lines[i].replace(/\s+/g, '');
+      const suitIndex = SUITS.findIndex(name => compact.startsWith(name));
+      if(suitIndex < 0) return {error:`第 ${i + 1} 行没有识别到套装名称：${lines[i]}`};
+      const suitName = SUITS[suitIndex];
+      if(seen.has(suitName)) return {error:`套装“${suitName}”重复出现，请只保留一行。`};
+      const digits = compact.slice(suitName.length);
+      if(!/^[0-5]{11}$/.test(digits)) return {error:`第 ${i + 1} 行格式不正确。${suitName} 后面需要紧跟 11 位 0-5 数字。`};
+      parsed[suitIndex] = digits.split('').map(v => Number(v));
+      seen.add(suitName);
+    }
+    const missing = SUITS.filter(name => !seen.has(name));
+    if(missing.length) return {error:`缺少套装：${missing.join('、')}`};
+    return {matrix: parsed};
+  }
+  function confirmImport(){
+    const parsed = parseImportText(importTextarea.value);
+    if(parsed.error){
+      setImportPreview(parsed.error, true);
+      return;
+    }
+    state.stars = parsed.matrix;
+    state.inventory = defaultInventory();
+    saveState();
+    closeImportModal();
+    markDirty('批量导入完成，主表已更新，请点击页面底部“计算”。');
+  }
+  function openInventoryModal(suitIndex, partIndex){
+    inventoryEditing = {suitIndex, partIndex};
+    const current = state.inventory[suitIndex][partIndex];
+    modalTitle.textContent = `库存录入：${SUIT_LABELS[suitIndex]}｜${PARTS[partIndex]}`;
+    modalGrid.innerHTML = [1,2,3,4,5].map(star => `<div class="inv-item"><label>${star}星数量</label><input class="inv-input" type="number" min="0" step="1" inputmode="numeric" value="${current[star] || 0}" data-star="${star}"></div>`).join('');
+    modalGrid.querySelectorAll('[data-star]').forEach(input => {
+      input.oninput = refreshModalPreview;
+      input.onkeydown = event => {
+        if(event.key === 'Enter'){ event.preventDefault(); modalConfirm.click(); }
+        if(event.key === 'ArrowUp' || event.key === 'ArrowDown') event.preventDefault();
+      };
+      input.onfocus = event => event.target.select();
+    });
+    refreshModalPreview();
+    inventoryModal.classList.add('show');
+  }
+  function closeInventoryModal(){ inventoryModal.classList.remove('show'); inventoryEditing = null; }
+  function confirmInventory(){
+    if(!inventoryEditing) return;
+    const counts = getModalCounts();
+    const result = computeHighestStarFromCounts(counts);
+    state.inventory[inventoryEditing.suitIndex][inventoryEditing.partIndex] = counts;
+    state.stars[inventoryEditing.suitIndex][inventoryEditing.partIndex] = result.maxStar;
+    saveState();
+    closeInventoryModal();
+    markDirty('库存已更新，请点击页面底部“计算”。');
+  }
+
+  function syncFloatingHeaderGeometry(){
+    const mainTable = tableWrap.querySelector('table');
+    const floatingTable = floatingTableScroll.querySelector('table');
+    if(!mainTable || !floatingTable) return;
+    const wrapRect = tableWrap.getBoundingClientRect();
+    floatingTableHead.style.left = `${Math.max(0, wrapRect.left)}px`;
+    floatingTableHead.style.width = `${Math.max(0, wrapRect.width)}px`;
+    floatingTable.style.width = `${mainTable.scrollWidth}px`;
+    floatingTable.style.minWidth = `${mainTable.scrollWidth}px`;
+    floatingTableScroll.scrollLeft = tableWrap.scrollLeft;
+  }
+  function updateFloatingHeaderVisibility(){
+    const mobile = window.matchMedia('(max-width:900px)').matches;
+    if(!mobile){
+      floatingTableHead.classList.remove('show');
+      return;
+    }
+    syncFloatingHeaderGeometry();
+    const wrapRect = tableWrap.getBoundingClientRect();
+    const nativeHeadRect = mainTableHead.getBoundingClientRect();
+    const wrapVisible = wrapRect.top < window.innerHeight && wrapRect.bottom > 0;
+    const nativeVisible = nativeHeadRect.bottom > 0 && nativeHeadRect.top < window.innerHeight;
+    floatingTableHead.classList.toggle('show', wrapVisible && !nativeVisible);
+  }
+  function bindFloatingHeaderEvents(){
+    let syncing = false;
+    tableWrap.addEventListener('scroll', () => {
+      if(syncing) return;
+      syncing = true;
+      floatingTableScroll.scrollLeft = tableWrap.scrollLeft;
+      syncing = false;
+      updateFloatingHeaderVisibility();
+    }, {passive:true});
+    floatingTableScroll.addEventListener('scroll', () => {
+      if(syncing) return;
+      syncing = true;
+      tableWrap.scrollLeft = floatingTableScroll.scrollLeft;
+      syncing = false;
+    }, {passive:true});
+    window.addEventListener('scroll', updateFloatingHeaderVisibility, {passive:true});
+    window.addEventListener('resize', updateFloatingHeaderVisibility, {passive:true});
+    window.addEventListener('orientationchange', updateFloatingHeaderVisibility, {passive:true});
+  }
+
+  function computeAndRender(switchToResults = false){
+    saveState();
+    renderHead();
+    renderLockBar();
+    const currentEval = renderCurrentPanel();
+    const result = computeTopPlans();
+    if(result.error){
+      resultsBox.innerHTML = '';
+      renderTable({});
+      bindDynamicEvents();
+      updateFloatingHeaderVisibility();
+      setStatus(result.error, true);
+      setResultStatus(result.error, true);
+      switchTab('input');
+      return;
+    }
+    const plans = result.plans.slice(0, 5);
+    renderResults(plans, currentEval);
+    renderTable(buildHighlightMap(plans));
+    bindDynamicEvents();
+    updateFloatingHeaderVisibility();
+    setStatus('计算完成。当前结果已更新。');
+    setResultStatus('Top5 结果已更新。');
+    if(switchToResults) switchTab('results');
+  }
+
+
+  function clearTableData(){ state.stars = defaultMatrix(); state.inventory = defaultInventory(); saveState(); markDirty('主表数据已清空，请点击页面底部“计算”。'); }
+  function clearLocks(){ state.locks = defaultLocks(); saveState(); markDirty('锁定已清空，请点击页面底部“计算”。'); }
+  function clearCurrent(){ state.currentScore = ''; state.currentWear = defaultCurrentWear(); saveState(); markDirty('当前装备和抗魔已清空，请点击页面底部“计算”。'); }
+  function fillRandom(){ state.stars = SUITS.map(() => PARTS.map(() => Math.floor(Math.random() * 6))); state.inventory = defaultInventory(); saveState(); markDirty('已填入随机测试数据，请点击页面底部“计算”。'); }
+
+  function bindStaticEvents(){
+    inputTabBtn.addEventListener('click', () => switchTab('input'));
+    resultsTabBtn.addEventListener('click', () => switchTab('results'));
+    randomBtn.addEventListener('click', fillRandom);
+    importBtn.addEventListener('click', openImportModal);
+    cacheBtn.addEventListener('click', openCacheModal);
+    exportBtn.addEventListener('click', openExportModal);
+    clearTableBtn.addEventListener('click', clearTableData);
+    clearLocksBtn.addEventListener('click', clearLocks);
+    clearCurrentBtn.addEventListener('click', clearCurrent);
+    calculateBtn.addEventListener('click', () => computeAndRender(true));
+    resultStatusBox.addEventListener('click', event => {
+      if(event.target && event.target.dataset && event.target.dataset.role === 'result-calc-btn'){
+        computeAndRender(false);
+      }
+    });
+    modalCancel.addEventListener('click', closeInventoryModal);
+    modalConfirm.addEventListener('click', confirmInventory);
+    copyTemplateBtn.addEventListener('click', copyImportTemplate);
+    importCancel.addEventListener('click', closeImportModal);
+    importConfirm.addEventListener('click', confirmImport);
+    exportCopyBtn.addEventListener('click', copyExportText);
+    exportCloseBtn.addEventListener('click', closeExportModal);
+    cacheCloseBtn.addEventListener('click', closeCacheModal);
+    inventoryModal.addEventListener('click', event => { if(event.target === inventoryModal) closeInventoryModal(); });
+    importModal.addEventListener('click', event => { if(event.target === importModal) event.stopPropagation(); });
+    exportModal.addEventListener('click', event => { if(event.target === exportModal) closeExportModal(); });
+    cacheModal.addEventListener('click', event => { if(event.target === cacheModal) closeCacheModal(); });
+    importTextarea.addEventListener('keydown', event => {
+      if((event.ctrlKey || event.metaKey) && event.key === 'Enter'){
+        event.preventDefault();
+        confirmImport();
+      }
+    });
+    exportTextarea.addEventListener('keydown', event => {
+      if((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c'){
+        event.preventDefault();
+        copyExportText();
+      }
+    });
+    document.addEventListener('keydown', event => {
+      if(event.key !== 'Escape') return;
+      if(exportModal.classList.contains('show')) closeExportModal();
+      if(cacheModal.classList.contains('show')) closeCacheModal();
+      if(inventoryModal.classList.contains('show')) closeInventoryModal();
+    });
+  }
+
+  bindStaticEvents();
+  bindFloatingHeaderEvents();
+  renderHead();
+  renderLockBar();
+  renderCurrentPanel();
+  renderTable({});
+  bindDynamicEvents();
+  renderResultCalcPrompt();
+  updateFloatingHeaderVisibility();
+})();
+</script>
+</body>
+</html>
