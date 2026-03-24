@@ -227,8 +227,8 @@
           <button class="primary" id="randomBtn" type="button">填入随机测试数据</button>
           <button id="clearTableBtn" type="button">清空表格数据</button>
           <button id="clearLocksBtn" type="button">清空锁定</button>
-          <button id="clearCurrentBtn" type="button">清空当前装备和抗魔</button>
-          <button id="cacheBtn" type="button">保存数据到缓存</button>
+          <button id="clearCurrentBtn" type="button">清空当前穿戴和抗魔</button>
+          <button id="cacheBtn" type="button">数据存储</button>
         </div>
         <div class="status" id="statusBox">修改输入后不会自动计算。主表星级填 0-5；点击 ★ 录入库存会自动回填这件装备的最高可达星级。完成后请点击页面底部“计算”。</div>
       </section>
@@ -241,7 +241,7 @@
       </details>
 
       <details class="card group" id="currentGroup">
-        <summary><span>当前穿戴和抗魔值录入</span><span class="summary-right">点开后可录入当前穿戴的装备、星级和角色当前抗魔</span></summary>
+        <summary><span>当前穿戴和抗魔</span><span class="summary-right">点开后可录入当前穿戴的装备、星级和角色当前抗魔</span></summary>
         <div class="group-body current-panel">
           <div class="current-top">
             <div class="score-box">
@@ -338,7 +338,7 @@
 
   <div class="modal" id="cacheModal">
     <div class="modal-card import-card">
-      <h3 class="modal-title">保存数据到缓存</h3>
+      <h3 class="modal-title">数据存储</h3>
       <p class="modal-sub">可在本地缓存中保存最多 10 套数据。每个缓存位都可以保存当前整页数据，也可以读取或删除。</p>
       <div class="cache-slots" id="cacheSlots"></div>
       <div class="modal-bottom">
@@ -914,11 +914,11 @@
     const showFinal = currentEval.currentScoreNum > 0;
     const finalScore = showFinal ? (currentEval.currentScoreNum + plan.totalScore - currentEval.total) : null;
     const finalPart = showFinal
-      ? `；更换装备后的最终抗魔：<span class="final-inline">${finalScore.toLocaleString()}</span>`
-      : '；更换装备后的最终抗魔：<span class="muted">未录入换装前角色总抗魔</span>';
+      ? `；更换装备后的最终抗魔（有浮动）：<span class="final-inline">${finalScore.toLocaleString()}</span>`
+      : '；更换装备后的最终抗魔（有浮动）：<span class="muted">未录入换装前角色总抗魔</span>';
     return `<div class="result-lines">
       <div class="result-line metrics">基础：${plan.baseScore.toLocaleString()}；加成：${plan.bonusScore.toLocaleString()}${finalPart}</div>
-      <div class="result-line plan"><div>穿戴方案（<span class="plan-note" style="color:var(--red);font-weight:800;">请仔细确认角色是否拥有或可升级到以下星级的装备</span>）</div><div class="plan-group-list">${grouped.join('')}</div></div>
+      <div class="result-line plan"><div>穿戴方案（<span class="plan-note" style="color:var(--red);font-weight:800;">请仔细确认拥有或可升级到以下星级装备</span>）</div><div class="plan-group-list">${grouped.join('')}</div></div>
     </div>`;
   }
 
