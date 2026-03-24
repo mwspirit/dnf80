@@ -60,6 +60,8 @@
     .lock-select,.current-select,.current-star,.score-input{
       width:100%;height:44px;border:1px solid #c8d3e0;border-radius:12px;background:#fff;padding:0 10px;font-size:15px;outline:none
     }
+    .score-input{appearance:textfield;-moz-appearance:textfield}
+    .score-input::-webkit-outer-spin-button,.score-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
     .lock-select:focus,.current-select:focus,.current-star:focus,.score-input:focus,.star-input:focus,.inv-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
     .current-top{display:grid;grid-template-columns:minmax(220px,250px) minmax(0,1fr);gap:8px;align-items:start;margin-bottom:8px}
     .score-box{display:grid;gap:6px}
@@ -239,12 +241,12 @@
       </details>
 
       <details class="card group" id="currentGroup">
-        <summary><span>当前穿戴和抗魔值录入</span><span class="summary-right">点开后可录入当前穿戴的装备、星级和角色总抗魔</span></summary>
+        <summary><span>当前穿戴和抗魔值录入</span><span class="summary-right">点开后可录入当前穿戴的装备、星级和角色当前抗魔</span></summary>
         <div class="group-body current-panel">
           <div class="current-top">
             <div class="score-box">
-              <label for="currentScoreInput">角色总抗魔</label>
-              <input id="currentScoreInput" class="score-input" type="number" min="0" step="1" inputmode="numeric" placeholder="不填或填 0 则不显示更换装备后的最终抗魔">
+              <label for="currentScoreInput">角色当前抗魔</label>
+              <input id="currentScoreInput" class="score-input" type="number" min="0" step="1" inputmode="numeric">
             </div>
             <div class="summary-row" id="currentSummary"></div>
           </div>
@@ -698,7 +700,7 @@
     };
     const evalResult = evaluateCurrentWear();
     currentSummary.innerHTML = [
-      `<div class="summary-card"><div class="summary-label">角色总抗魔</div><div class="summary-value">${state.currentScore === '' ? '-' : Number(state.currentScore).toLocaleString()}</div></div>`,
+      `<div class="summary-card"><div class="summary-label">角色当前抗魔</div><div class="summary-value">${state.currentScore === '' ? '-' : Number(state.currentScore).toLocaleString()}</div></div>`,
       `<div class="summary-card"><div class="summary-label">当前装备奖励抗魔</div><div class="summary-value">${evalResult.total.toLocaleString()}</div></div>`,
       `<div class="summary-card"><div class="summary-label">非装备抗魔</div><div class="summary-value">${evalResult.nonEquipDisplay}</div></div>`
     ].join('');
@@ -941,20 +943,26 @@
   }
 
   function getAllStarInputs(){ return Array.from(document.querySelectorAll('.star-input')); }
+  function focusStarInputByIndex(targetIndex){
+    const inputs = getAllStarInputs();
+    if(!inputs.length) return;
+    const safeIndex = ((targetIndex % inputs.length) + inputs.length) % inputs.length;
+    const nextInput = inputs[safeIndex];
+    if(nextInput){ nextInput.focus(); nextInput.select(); }
+  }
   function focusNextStarInput(currentInput, reverse = false){
     const inputs = getAllStarInputs();
     const currentIndex = inputs.indexOf(currentInput);
     if(currentIndex < 0) return;
     const delta = reverse ? -1 : 1;
-    const nextIndex = (currentIndex + delta + inputs.length) % inputs.length;
-    const nextInput = inputs[nextIndex];
-    if(nextInput){ nextInput.focus(); nextInput.select(); }
+    focusStarInputByIndex(currentIndex + delta);
   }
   function bindDynamicEvents(){
     document.querySelectorAll('.star-input').forEach(input => {
       input.oninput = event => {
         const suitIndex = Number(event.target.dataset.suit);
         const partIndex = Number(event.target.dataset.part);
+        const currentIndex = getAllStarInputs().indexOf(event.target);
         const sanitized = String(event.target.value).replace(/[^\d]/g, '').slice(-1);
         if(sanitized === ''){
           state.stars[suitIndex][partIndex] = 0;
@@ -968,7 +976,7 @@
         event.target.value = value;
         saveState();
         markDirty();
-        setTimeout(() => focusNextStarInput(event.target), 0);
+        if(currentIndex >= 0) setTimeout(() => focusStarInputByIndex(currentIndex + 1), 0);
       };
       input.onkeydown = event => {
         if(event.key === 'Tab'){
