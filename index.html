@@ -103,6 +103,10 @@
     .plan-group .group-items{color:var(--muted);font-weight:700}
     .suit-name.suit-green{color:var(--green)}
     .suit-name.suit-red{color:var(--red)}
+    .suit-cell{display:grid;justify-items:center;gap:6px;line-height:1.15;padding:2px 0}
+    .suit-disable{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
+    .suit-disable input{margin:0;width:14px;height:14px;accent-color:var(--red)}
+    tbody tr.suit-disabled th{background:#fff5f5}
 
     .legend{padding:0 2px;display:flex;flex-wrap:wrap;gap:8px;font-size:14px;color:var(--muted)}
     .legend-item{display:inline-flex;align-items:center;gap:7px}
@@ -113,8 +117,8 @@
     .table-wrap{width:100%;max-width:100%;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x pan-y;border-top:1px solid var(--line)}
     table{border-collapse:collapse;width:max(100%,1100px);min-width:1100px;table-layout:fixed;background:#fff}
     thead th{position:sticky;top:0;z-index:3;background:#eef3fb;font-size:14px}
-    thead th:first-child{left:0;z-index:5;width:62px;min-width:62px;max-width:62px}
-    tbody th{position:sticky;left:0;z-index:2;background:#f7f9fd;width:62px;min-width:62px;max-width:62px;font-weight:900}
+    thead th:first-child{left:0;z-index:5;width:92px;min-width:92px;max-width:92px}
+    tbody th{position:sticky;left:0;z-index:2;background:#f7f9fd;width:92px;min-width:92px;max-width:92px;font-weight:900}
     th,td{border:1px solid #e5eaf2;padding:6px 4px;text-align:center;vertical-align:middle}
     .part70b-head{background:#dbeafe}
     .th-sub{display:block;font-size:10px;color:var(--blue);font-weight:700;margin-top:2px;line-height:1.1}
@@ -140,7 +144,7 @@
     .floating-head-scroll::-webkit-scrollbar{display:none}
     .floating-head table{border-collapse:collapse;table-layout:fixed;background:#fff}
     .floating-head thead th{position:sticky;top:0;z-index:3;background:#eef3fb;font-size:14px}
-    .floating-head thead th:first-child{left:0;z-index:5;width:62px;min-width:62px;max-width:62px}
+    .floating-head thead th:first-child{left:0;z-index:5;width:92px;min-width:92px;max-width:92px}
 
     .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:14px;background:rgba(15,23,42,.38);z-index:80;overflow:auto}
     .modal.show{display:flex}
@@ -442,6 +446,7 @@
   }
   function defaultInventory(){ return SUITS.map(() => PARTS.map(() => ({1:0,2:0,3:0,4:0,5:0}))); }
   function defaultLocks(){ return PARTS.map(() => null); }
+  function defaultDisabledSuits(){ return SUITS.map(() => false); }
   function defaultCurrentWear(){ return PARTS.map(() => ({type:'', suitIndex:null, b70Token:'', star:0})); }
   function clampInt(value, min, max){ const n = Number.parseInt(value, 10); if(Number.isNaN(n)) return min; return Math.min(max, Math.max(min, n)); }
 
@@ -480,11 +485,12 @@
         stars: sanitizeMatrix(raw.stars),
         inventory: sanitizeInventory(raw.inventory),
         locks: sanitizeLocks(raw.locks),
+        disabledSuits: sanitizeDisabledSuits(raw.disabledSuits),
         currentScore: sanitizeCurrentScore(raw.currentScore),
         currentWear: sanitizeCurrentWear(raw.currentWear)
       };
     } catch {
-      return {stars:defaultMatrix(), inventory:defaultInventory(), locks:defaultLocks(), currentScore:'', currentWear:defaultCurrentWear()};
+      return {stars:defaultMatrix(), inventory:defaultInventory(), locks:defaultLocks(), disabledSuits:defaultDisabledSuits(), currentScore:'', currentWear:defaultCurrentWear()};
     }
   }
   function sanitizeMatrix(v){
@@ -504,6 +510,11 @@
     const base = defaultLocks();
     if(!Array.isArray(v)) return base;
     return base.map((_, partIndex) => normalizeLockValue(partIndex, v[partIndex]));
+  }
+  function sanitizeDisabledSuits(v){
+    const base = defaultDisabledSuits();
+    if(!Array.isArray(v)) return base;
+    return base.map((_, suitIndex) => !!v[suitIndex]);
   }
   function sanitizeCurrentWear(v){
     const base = defaultCurrentWear();
@@ -529,6 +540,7 @@
       stars: sanitizeMatrix(src.stars),
       inventory: sanitizeInventory(src.inventory),
       locks: sanitizeLocks(src.locks),
+      disabledSuits: sanitizeDisabledSuits(src.disabledSuits),
       currentScore: sanitizeCurrentScore(src.currentScore),
       currentWear: sanitizeCurrentWear(src.currentWear)
     };
@@ -609,7 +621,7 @@
   }
 
   function renderHead(){
-    const headerHtml = ['<th></th>'].concat(PARTS.map((part, partIndex) => {
+    const headerHtml = ['<th>套装</th>'].concat(PARTS.map((part, partIndex) => {
       const lockInfo = getLockInfo(partIndex);
       const active = lockInfo && lockInfo.type === 'b70';
       return `<th class="${active ? 'part70b-head' : ''}">${part}${active ? '<span class="th-sub">70B锁定</span>' : ''}</th>`;
@@ -739,6 +751,7 @@
 
   function renderTable(highlightMap = {}){
     bodyRows.innerHTML = SUITS.map((_, suitIndex) => {
+      const disabled = !!state.disabledSuits[suitIndex];
       const cols = PARTS.map((__, partIndex) => {
         const key = `${suitIndex}-${partIndex}`;
         const ranks = highlightMap[key] || [];
@@ -752,7 +765,8 @@
         const badgesClass = `badges${ranks.length > 3 ? ' badges-crowded' : ''}`;
         return `<td class="${tdClass}"><div class="cell"><input class="star-input" type="number" min="0" max="5" step="1" inputmode="numeric" value="${state.stars[suitIndex][partIndex]}" data-suit="${suitIndex}" data-part="${partIndex}"><button class="mini ${hasInventory ? 'active' : ''}" type="button" data-action="inventory" data-suit="${suitIndex}" data-part="${partIndex}" tabindex="-1">★</button><div class="${badgesClass}">${badges}</div></div></td>`;
       }).join('');
-      return `<tr><th>${getSuitLabelHtml(suitIndex)}</th>${cols}</tr>`;
+      const head = `<div class="suit-cell">${getSuitLabelHtml(suitIndex)}<label class="suit-disable"><input type="checkbox" class="disable-suit-input" data-suit="${suitIndex}" ${disabled ? 'checked' : ''}>禁用</label></div>`;
+      return `<tr class="${disabled ? 'suit-disabled' : ''}"><th>${head}</th>${cols}</tr>`;
     }).join('');
   }
 
@@ -786,17 +800,22 @@
   function precomputeSubsetScores(allowed, remainingMask){
     const subsetScores = Array.from({length: SUITS.length}, () => Array(1 << PARTS.length).fill(Number.NEGATIVE_INFINITY));
     for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
+      const disabled = !!state.disabledSuits[suitIndex];
       subsetScores[suitIndex][0] = 0;
       for(let submask = remainingMask; ; submask = (submask - 1) & remainingMask){
         if(submask !== 0){
-          let base = 0; let feasible = true; const stars = [];
-          for(let partIndex = 0; partIndex < PARTS.length; partIndex++) if((submask >> partIndex) & 1){
-            if(!allowed[suitIndex][partIndex]){ feasible = false; break; }
-            const star = state.stars[suitIndex][partIndex];
-            base += getPartScore(partIndex, star);
-            stars.push(star);
+          if(disabled && ((submask & (submask - 1)) !== 0)){
+            // 勾选禁用后，该套装最多只能装备 1 件
+          } else {
+            let base = 0; let feasible = true; const stars = [];
+            for(let partIndex = 0; partIndex < PARTS.length; partIndex++) if((submask >> partIndex) & 1){
+              if(!allowed[suitIndex][partIndex]){ feasible = false; break; }
+              const star = state.stars[suitIndex][partIndex];
+              base += getPartScore(partIndex, star);
+              stars.push(star);
+            }
+            if(feasible){ subsetScores[suitIndex][submask] = base + computeBonusForStars(stars).bonus; }
           }
-          if(feasible){ subsetScores[suitIndex][submask] = base + computeBonusForStars(stars).bonus; }
         }
         if(submask === 0) break;
       }
@@ -989,6 +1008,14 @@
     });
     document.querySelectorAll('[data-action="inventory"]').forEach(btn => {
       btn.onclick = event => openInventoryModal(Number(event.currentTarget.dataset.suit), Number(event.currentTarget.dataset.part));
+    });
+    document.querySelectorAll('.disable-suit-input').forEach(input => {
+      input.onchange = event => {
+        const suitIndex = Number(event.target.dataset.suit);
+        state.disabledSuits[suitIndex] = !!event.target.checked;
+        saveState();
+        markDirty(event.target.checked ? `已禁用“${SUITS[suitIndex]}”多件穿戴，该套装现在最多只能装备 1 件。` : `已取消“${SUITS[suitIndex]}”禁用限制，请点击页面底部“计算”。`);
+      };
     });
   }
 
