@@ -69,7 +69,17 @@
     .summary-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
     .summary-card{border:1px solid var(--line);border-radius:14px;background:#fbfdff;padding:8px 10px;display:grid;gap:2px}
     .summary-label{font-size:13px;color:var(--muted)}
+    .summary-label-inline{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
     .summary-value{font-size:20px;font-weight:900}
+    .hint-btn{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:24px;padding:0 8px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--blue);font-size:12px;font-weight:800;cursor:pointer;line-height:1;vertical-align:middle}
+    .hint-btn:hover{transform:translateY(-1px);box-shadow:0 6px 14px rgba(15,23,42,.08)}
+    .detail-card{max-width:min(620px,calc(100vw - 20px))}
+    .detail-body{max-height:min(60vh,520px);overflow:auto;border:1px solid var(--line);border-radius:14px;background:#fbfdff;padding:12px 14px;display:grid;gap:12px;line-height:1.75}
+    .detail-section{display:grid;gap:6px}
+    .detail-heading{font-size:15px;font-weight:900;color:var(--text)}
+    .detail-note{font-size:13px;color:var(--muted)}
+    .detail-lines{font-size:14px;color:var(--text)}
+    .detail-lines b{font-weight:900}
     .current-grid{grid-template-columns:repeat(8,minmax(0,1fr))}
     .current-controls{display:grid;grid-template-columns:minmax(0,1fr) 78px;gap:4px}
     .hide{display:none!important}
@@ -81,6 +91,7 @@
     details.rank-card.rank3{border-color:#efb6b6;background:linear-gradient(180deg,#fff8f8 0%,#fff 100%)}
     details.rank-card.rank4{border-color:#d8c5ff;background:linear-gradient(180deg,#fcf8ff 0%,#fff 100%)}
     details.rank-card.rank5{border-color:#bfeaf3;background:linear-gradient(180deg,#f4fdff 0%,#fff 100%)}
+    details.rank-card.rank6,details.rank-card.rank7,details.rank-card.rank8,details.rank-card.rank9,details.rank-card.rank10{border-color:#dbe4f0;background:linear-gradient(180deg,#fafcff 0%,#fff 100%)}
     .rank-card summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 12px;font-weight:900}
     .rank-card summary::-webkit-details-marker{display:none}
     .rank-card summary .summary-main{font-size:20px;font-weight:900;line-height:1.2}
@@ -89,6 +100,7 @@
     .rank-card.rank3 summary .summary-main{color:var(--red)}
     .rank-card.rank4 summary .summary-main{color:var(--purple)}
     .rank-card.rank5 summary .summary-main{color:#0891b2}
+    .rank-card.rank6 summary .summary-main,.rank-card.rank7 summary .summary-main,.rank-card.rank8 summary .summary-main,.rank-card.rank9 summary .summary-main,.rank-card.rank10 summary .summary-main{color:#334155}
     .rank-card summary .summary-right{font-size:13px;color:var(--muted);font-weight:700;flex:0 0 auto}
     .rank-body{padding:0 12px 12px;display:grid;gap:8px}
     .result-lines{display:grid;gap:8px}
@@ -214,14 +226,14 @@
   <div class="page">
     <section class="card hero">
       <h1>套装抗魔最优搭配计算器</h1>
-      <p>录入主表中每件装备当前可用的最高星级，系统会自动精确计算抗魔最高的前 5 套方案，并在主表中直接高亮推荐选择。</p>
+      <p>录入主表中每件装备当前可用的最高星级，系统会自动精确计算抗魔最高的前 10 套方案，并在主表中直接高亮推荐选择。</p>
       <p class="author">作者：凯丽-神秘势力-流浪剑客</p>
     </section>
 
     <section class="card">
       <div class="tabs">
         <button class="tab-btn active" id="inputTabBtn" type="button">输入数据</button>
-        <button class="tab-btn" id="resultsTabBtn" type="button">Top5结果</button>
+        <button class="tab-btn" id="resultsTabBtn" type="button">Top10结果</button>
       </div>
     </section>
 
@@ -354,6 +366,19 @@
     </div>
   </div>
 
+  <div class="modal" id="detailModal">
+    <div class="modal-card detail-card">
+      <h3 class="modal-title" id="detailTitle">计算明细</h3>
+      <div class="detail-body" id="detailBody"></div>
+      <div class="modal-bottom">
+        <div class="preview" id="detailPreview">用于说明当前装备奖励抗魔或方案加成抗魔的计算来源。</div>
+        <div class="modal-actions">
+          <button type="button" class="primary" id="detailCloseBtn">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 <script>
 (() => {
   const SUITS = ['万灵','永恒','残夜','复苏','冰川','纵横','凌云','星辰','万世','天劫','暗夜','时光','逝魔','铁马','上元'];
@@ -362,7 +387,7 @@
   const PARTS = ['胸','腿','肩','腰','鞋','项链','手镯','戒指','辅助装备','魔法石','耳环'];
   const PART_INDEX = Object.fromEntries(PARTS.map((p, i) => [p, i]));
   const CURRENT_WEAR_ORDER = ['肩','胸','腿','腰','鞋','手镯','项链','戒指','辅助装备','魔法石','耳环'].map(part => PART_INDEX[part]);
-  const SPECIAL_PARTS = new Set(['胸', '耳环']);
+  const SPECIAL_PARTS = new Set(['胸', '手镯', '耳环']);
   const STAR_VALUES = {
     special: {1:6665,2:7417,3:8170,4:8922,5:9675},
     normal: {1:5805,2:6557,3:7310,4:8062,5:8815}
@@ -380,7 +405,7 @@
     {partIndex: PART_INDEX['手镯'], token: 'b70:bracelet', label: '70B', resultLabel: '手镯70B', score: 9520}
   ];
   const B70_BY_PART = Object.fromEntries(B70_OPTIONS.map(v => [v.partIndex, v]));
-  const TOP_K = 5;
+  const TOP_K = 10;
   const FULL_MASK = (1 << PARTS.length) - 1;
   const STORAGE_KEY = 'equipment_planner_final_v20260324_top5';
   const CACHE_STORAGE_KEY = 'equipment_planner_cache_slots_v20260324_top10';
@@ -449,6 +474,7 @@
   function defaultDisabledSuits(){ return SUITS.map(() => false); }
   function defaultCurrentWear(){ return PARTS.map(() => ({type:'', suitIndex:null, b70Token:'', star:0})); }
   function clampInt(value, min, max){ const n = Number.parseInt(value, 10); if(Number.isNaN(n)) return min; return Math.min(max, Math.max(min, n)); }
+  function escapeHtml(value){ return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
   function switchTab(tab){
     const showInput = tab !== 'results';
@@ -467,6 +493,7 @@
     resultStatusBox.className = 'status';
   }
   function markDirty(message){
+    lastComputedPlans = [];
     renderHead();
     renderLockBar();
     renderCurrentPanel();
@@ -713,7 +740,7 @@
     const evalResult = evaluateCurrentWear();
     currentSummary.innerHTML = [
       `<div class="summary-card"><div class="summary-label">角色当前抗魔</div><div class="summary-value">${state.currentScore === '' ? '-' : Number(state.currentScore).toLocaleString()}</div></div>`,
-      `<div class="summary-card"><div class="summary-label">当前装备奖励抗魔</div><div class="summary-value">${evalResult.total.toLocaleString()}</div></div>`,
+      `<div class="summary-card"><div class="summary-label summary-label-inline">当前装备奖励抗魔<button type="button" class="hint-btn" data-detail-type="current-bonus">明细</button></div><div class="summary-value">${evalResult.total.toLocaleString()}</div></div>`,
       `<div class="summary-card"><div class="summary-label">非装备抗魔</div><div class="summary-value">${evalResult.nonEquipDisplay}</div></div>`
     ].join('');
     return evalResult;
@@ -748,6 +775,77 @@
       nonEquipDisplay: hasCurrentScore ? (currentScoreNum - total).toLocaleString() : '-'
     };
   }
+
+  function formatCurrentBonusDetailHtml(){
+    const evalResult = evaluateCurrentWear();
+    const baseLines = [];
+    for(let partIndex = 0; partIndex < PARTS.length; partIndex++){
+      const curr = state.currentWear[partIndex];
+      if(curr.type === 'b70'){
+        baseLines.push(`${PARTS[partIndex]}：70B +${(B70_BY_PART[partIndex]?.score || 0).toLocaleString()}`);
+      }else if(curr.type === 'suit' && curr.suitIndex !== null && curr.star > 0){
+        baseLines.push(`${PARTS[partIndex]}：${SUITS[curr.suitIndex]}${curr.star}星 +${getPartScore(partIndex, curr.star).toLocaleString()}`);
+      }
+    }
+    const bonusLines = evalResult.bonusDetails.length ? evalResult.bonusDetails : ['未触发套装加成'];
+    return `
+      <div class="detail-section">
+        <div class="detail-heading">当前装备奖励抗魔 = 基础抗魔 + 套装加成抗魔</div>
+        <div class="detail-lines"><b>${evalResult.base.toLocaleString()}</b> + <b>${evalResult.bonus.toLocaleString()}</b> = <b>${evalResult.total.toLocaleString()}</b></div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-heading">单件基础抗魔明细（每件加多少）</div>
+        <div class="detail-lines">${baseLines.length ? baseLines.map(v => escapeHtml(v)).join('<br>') : '<span class="detail-note">当前未录入可计入的穿戴装备。</span>'}</div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-heading">套装加成抗魔明细</div>
+        <div class="detail-lines">${bonusLines.map(v => escapeHtml(v)).join('<br>')}</div>
+        <div class="detail-note">套装加成按每套已穿装备星级从高到低排序后，分别看 2/5/8/11 件套对应位置的最低星级来取奖励。</div>
+      </div>`;
+  }
+
+  function buildPlanBaseLines(plan){
+    const lines = [];
+    for(let partIndex = 0; partIndex < PARTS.length; partIndex++){
+      if(plan.fixedB70[partIndex]){
+        lines.push(`${PARTS[partIndex]}：70B +${B70_BY_PART[partIndex].score.toLocaleString()}`);
+        continue;
+      }
+      const suitIndex = plan.assignment[partIndex];
+      if(suitIndex < 0) continue;
+      const star = state.stars[suitIndex][partIndex];
+      if(star <= 0) continue;
+      lines.push(`${PARTS[partIndex]}：${SUITS[suitIndex]}${star}星 +${getPartScore(partIndex, star).toLocaleString()}`);
+    }
+    return lines;
+  }
+
+  function formatPlanBonusDetailHtml(plan, rank){
+    const baseLines = buildPlanBaseLines(plan);
+    const bonusLines = plan.bonusDetails.length ? plan.bonusDetails : ['未触发套装加成'];
+    return `
+      <div class="detail-section">
+        <div class="detail-heading">${escapeHtml(getRankLabel(rank))}总抗魔 = 单件基础抗魔 + 套装加成抗魔</div>
+        <div class="detail-lines"><b>${plan.baseScore.toLocaleString()}</b> + <b>${plan.bonusScore.toLocaleString()}</b> = <b>${plan.totalScore.toLocaleString()}</b></div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-heading">单件基础抗魔明细（每件加多少）</div>
+        <div class="detail-lines">${baseLines.length ? baseLines.map(v => escapeHtml(v)).join('<br>') : '<span class="detail-note">当前方案无可展示的单件基础抗魔明细。</span>'}</div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-heading">套装加成抗魔明细</div>
+        <div class="detail-lines">${bonusLines.map(v => escapeHtml(v)).join('<br>')}</div>
+        <div class="detail-note">计算规则：对每套已穿装备按星级从高到低排序，2/5/8/11 件套分别取第 2/5/8/11 高那件的星级，作为该门槛的奖励档位。</div>
+      </div>`;
+  }
+
+  function openDetailModal(title, html, preview = '点击关闭即可返回当前页面。'){
+    detailTitle.textContent = title;
+    detailBody.innerHTML = html;
+    detailPreview.textContent = preview;
+    detailModal.classList.add('show');
+  }
+  function closeDetailModal(){ detailModal.classList.remove('show'); }
 
   function renderTable(highlightMap = {}){
     bodyRows.innerHTML = SUITS.map((_, suitIndex) => {
@@ -912,7 +1010,7 @@
     return map;
   }
 
-  function renderPlanRow(plan, currentEval){
+  function renderPlanRow(plan, currentEval, planIndex){
     const grouped = [];
     for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
       const items = [];
@@ -936,7 +1034,7 @@
       ? `；更换装备后的最终抗魔（有浮动）：<span class="final-inline">${finalScore.toLocaleString()}</span>`
       : '；更换装备后的最终抗魔（有浮动）：<span class="muted">未录入换装前角色总抗魔</span>';
     return `<div class="result-lines">
-      <div class="result-line metrics">基础：${plan.baseScore.toLocaleString()}；加成：${plan.bonusScore.toLocaleString()}${finalPart}</div>
+      <div class="result-line metrics">基础：${plan.baseScore.toLocaleString()}；加成抗魔：${plan.bonusScore.toLocaleString()}<button type="button" class="hint-btn" data-detail-type="plan-bonus" data-plan-index="${planIndex}">明细</button>${finalPart}</div>
       <div class="result-line plan"><div>穿戴方案（<span class="plan-note" style="color:var(--red);font-weight:800;">请仔细确认拥有或可升级到以下星级装备</span>）</div><div class="plan-group-list">${grouped.join('')}</div></div>
     </div>`;
   }
@@ -951,7 +1049,7 @@
     plans.forEach((plan, index) => {
       const rank = index + 1;
       const label = getRankLabel(rank);
-      blocks.push(`<details class="rank-card rank${rank}" open><summary><span class="summary-main">${label}：总抗魔 ${plan.totalScore.toLocaleString()}</span><span class="summary-right">点击展开</span></summary><div class="rank-body">${renderPlanRow(plan, currentEval)}</div></details>`);
+      blocks.push(`<details class="rank-card rank${rank}" open><summary><span class="summary-main">${label}：总抗魔 ${plan.totalScore.toLocaleString()}</span><span class="summary-right">点击展开</span></summary><div class="rank-body">${renderPlanRow(plan, currentEval, index)}</div></details>`);
     });
     resultsBox.innerHTML = blocks.join('');
   }
@@ -1384,6 +1482,7 @@
     const currentEval = renderCurrentPanel();
     const result = computeTopPlans();
     if(result.error){
+      lastComputedPlans = [];
       resultsBox.innerHTML = '';
       renderTable({});
       bindDynamicEvents();
@@ -1393,13 +1492,14 @@
       switchTab('input');
       return;
     }
-    const plans = result.plans.slice(0, 5);
+    const plans = result.plans.slice(0, TOP_K);
+    lastComputedPlans = plans;
     renderResults(plans, currentEval);
     renderTable(buildHighlightMap(plans));
     bindDynamicEvents();
     updateFloatingHeaderVisibility();
     setStatus('计算完成。当前结果已更新。');
-    setResultStatus('Top5 结果已更新。');
+    setResultStatus(`Top${TOP_K} 结果已更新。`);
     if(switchToResults) switchTab('results');
   }
 
@@ -1425,6 +1525,22 @@
         computeAndRender(false);
       }
     });
+    document.addEventListener('click', event => {
+      const detailBtn = event.target.closest('[data-detail-type]');
+      if(!detailBtn) return;
+      const type = detailBtn.dataset.detailType;
+      if(type === 'current-bonus'){
+        openDetailModal('当前装备奖励抗魔明细', formatCurrentBonusDetailHtml(), '这里显示当前穿戴装备的基础抗魔与套装加成来源。');
+        return;
+      }
+      if(type === 'plan-bonus'){
+        const planIndex = clampInt(detailBtn.dataset.planIndex, 0, Math.max(0, lastComputedPlans.length - 1));
+        const plan = lastComputedPlans[planIndex];
+        if(plan){
+          openDetailModal(`${getRankLabel(planIndex + 1)}加成抗魔明细`, formatPlanBonusDetailHtml(plan, planIndex + 1), '这里显示该方案的套装加成抗魔来源。');
+        }
+      }
+    });
     modalCancel.addEventListener('click', closeInventoryModal);
     modalConfirm.addEventListener('click', confirmInventory);
     copyTemplateBtn.addEventListener('click', copyImportTemplate);
@@ -1433,10 +1549,12 @@
     exportCopyBtn.addEventListener('click', copyExportText);
     exportCloseBtn.addEventListener('click', closeExportModal);
     cacheCloseBtn.addEventListener('click', closeCacheModal);
+    detailCloseBtn.addEventListener('click', closeDetailModal);
     inventoryModal.addEventListener('click', event => { if(event.target === inventoryModal) closeInventoryModal(); });
     importModal.addEventListener('click', event => { if(event.target === importModal) event.stopPropagation(); });
     exportModal.addEventListener('click', event => { if(event.target === exportModal) closeExportModal(); });
     cacheModal.addEventListener('click', event => { if(event.target === cacheModal) closeCacheModal(); });
+    detailModal.addEventListener('click', event => { if(event.target === detailModal) closeDetailModal(); });
     importTextarea.addEventListener('keydown', event => {
       if((event.ctrlKey || event.metaKey) && event.key === 'Enter'){
         event.preventDefault();
@@ -1451,6 +1569,7 @@
     });
     document.addEventListener('keydown', event => {
       if(event.key !== 'Escape') return;
+      if(detailModal.classList.contains('show')) closeDetailModal();
       if(exportModal.classList.contains('show')) closeExportModal();
       if(cacheModal.classList.contains('show')) closeCacheModal();
       if(inventoryModal.classList.contains('show')) closeInventoryModal();
