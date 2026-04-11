@@ -27,10 +27,28 @@
     .toolbar button:hover,.modal-actions button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
     .toolbar .primary,.modal-actions .primary{background:var(--blue);color:#fff;border-color:var(--blue)}
 
-    .table-actions{padding:0 12px 12px;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+
+    .table-actions{padding:0 12px 12px;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;align-items:flex-end}
     .table-actions button{border:1px solid var(--line);background:#fff;border-radius:12px;min-height:44px;padding:0 14px;font-size:15px;color:var(--text);cursor:pointer;transition:.12s transform,.12s box-shadow}
     .table-actions button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
     .table-actions .primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+    .set-target-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;justify-content:flex-start;margin-top:10px;padding-top:10px;border-top:1px dashed #e5eaf2}
+    .set-target-control{position:relative;min-width:148px;max-width:180px}
+    .set-target-control.wide{min-width:168px;max-width:210px}
+    .set-target-label{display:block;margin:0 0 6px;font-size:12px;line-height:1.2;font-weight:800;color:var(--muted)}
+    .set-target-trigger{width:100%;min-height:44px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;color:var(--text);cursor:pointer;transition:.12s transform,.12s box-shadow,.12s border-color}
+    .set-target-trigger:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
+    .set-target-control.open .set-target-trigger{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+    .set-target-trigger-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+    .set-target-trigger-arrow{flex:0 0 auto;font-size:12px;color:var(--muted)}
+    .set-target-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:35;width:100%;min-width:180px;max-height:280px;overflow:auto;border:1px solid var(--line);border-radius:14px;background:#fff;box-shadow:0 18px 36px rgba(15,23,42,.14);padding:6px}
+    .set-target-control.open .set-target-menu{display:block}
+    .set-target-option,.set-target-clear{width:100%;border:none;background:transparent;border-radius:10px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;color:var(--text);cursor:pointer;text-align:left}
+    .set-target-option:hover,.set-target-clear:hover{background:#f4f7fb}
+    .set-target-option-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .set-target-check{flex:0 0 auto;width:18px;text-align:center;font-size:14px;font-weight:900;color:var(--blue);visibility:hidden}
+    .set-target-check.show{visibility:visible}
+    .set-target-clear{justify-content:center;font-weight:800;color:var(--blue);border-bottom:1px solid #eef2f7;margin-bottom:4px;padding-bottom:10px}
     .status{margin:0 12px 12px;padding:9px 11px;border-radius:12px;border:1px solid var(--line);background:#f8fbff;font-size:14px;line-height:1.6;color:var(--muted)}
     .status.error{background:#fff2f2;border-color:#efb6b6;color:#8d1f1f}
     .status.ok{background:#edf9f1;border-color:#bce3c8;color:#17633c}
@@ -47,6 +65,9 @@
     .calc-bar button{border:1px solid var(--blue);background:var(--blue);color:#fff;border-radius:14px;min-height:48px;padding:0 22px;font-size:16px;font-weight:800;cursor:pointer}
 
     details.group{overflow:hidden}
+    #lockGroup{overflow:visible;position:relative;z-index:20}
+    #lockGroup .group-body{overflow:visible}
+    #lockGroup .set-target-bar{position:relative;z-index:25}
     details.group summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 12px;font-weight:800;font-size:16px}
     details.group summary::-webkit-details-marker{display:none}
     details.group summary .summary-right{font-size:13px;font-weight:700;color:var(--muted)}
@@ -118,6 +139,7 @@
     .suit-cell{display:grid;justify-items:center;gap:6px;line-height:1.15;padding:2px 0}
     .suit-disable{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
     .suit-disable input{margin:0;width:14px;height:14px;accent-color:var(--red)}
+    .suit-disabled-tag{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:18px;padding:0 6px;border-radius:999px;background:#fff1f1;color:var(--red);font-size:11px;font-weight:800;line-height:1}
     tbody tr.suit-disabled th{background:#fff5f5}
 
     .legend{padding:0 2px;display:flex;flex-wrap:wrap;gap:8px;font-size:14px;color:var(--muted)}
@@ -182,12 +204,24 @@
     .cache-slot.empty{background:#fff}
     .cache-slot-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
     .cache-slot-title{font-size:16px;font-weight:900;line-height:1.3}
+    .cache-slot-name-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+    .cache-slot-name-input{width:min(260px,100%);height:40px;border:1px solid #cdd5e1;border-radius:10px;background:#fff;padding:0 12px;font-size:15px;color:var(--text);outline:none}
+    .cache-slot-name-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+    .cache-slot-name-tip{font-size:12px;color:var(--muted);line-height:1.5}
     .cache-slot-meta{font-size:13px;color:var(--muted);line-height:1.6}
     .cache-slot-actions{display:flex;gap:8px;flex-wrap:wrap}
     .cache-slot-actions button{border:1px solid var(--line);background:#fff;border-radius:12px;min-height:42px;padding:0 14px;font-size:14px;color:var(--text);cursor:pointer;transition:.12s transform,.12s box-shadow}
     .cache-slot-actions button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
     .cache-slot-actions button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
     .cache-slot-actions button:disabled{opacity:.48;cursor:not-allowed;transform:none;box-shadow:none}
+
+    .toast-wrap{position:fixed;top:16px;right:16px;z-index:120;display:grid;gap:10px;pointer-events:none;max-width:min(420px,calc(100vw - 24px))}
+    .toast{pointer-events:auto;display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.98);box-shadow:0 12px 28px rgba(15,23,42,.14);color:var(--text);font-size:14px;line-height:1.65;transform:translateY(-8px);opacity:0;transition:opacity .18s ease,transform .18s ease}
+    .toast.show{opacity:1;transform:translateY(0)}
+    .toast.error{border-color:#efb6b6;background:#fff2f2;color:#8d1f1f}
+    .toast.success{border-color:#bce3c8;background:#edf9f1;color:#17633c}
+    .toast.info{border-color:#cfe0ff;background:#f8fbff;color:#1e3a8a}
+    .toast-close{margin-left:auto;border:0;background:transparent;color:inherit;font-size:16px;line-height:1;cursor:pointer;padding:0 0 0 6px}
 
     @media (max-width:1200px){
       .lock-grid,.current-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
@@ -211,6 +245,9 @@
     }
     @media (max-width:560px){
       .toolbar button{flex:1 1 100%}
+      .set-target-bar{width:100%}
+      .set-target-control{flex:1 1 100%;max-width:none}
+      .set-target-menu{left:0;right:auto;min-width:0}
       .table-actions button{flex:1 1 100%}
       .summary-row{grid-template-columns:1fr}
       .modal-actions{width:100%}
@@ -246,13 +283,14 @@
           <button id="clearCurrentBtn" type="button">清空当前穿戴和抗魔</button>
           <button id="cacheBtn" type="button">数据存储</button>
         </div>
-        <div class="status" id="statusBox">修改输入后不会自动计算。主表星级填 0-5；点击 ★ 录入库存会自动回填这件装备的最高可达星级。完成后请点击页面底部“计算”。</div>
+        <div class="status hide" id="statusBox">修改输入后不会自动计算。主表星级填 0-5；点击 ★ 录入库存会自动回填这件装备的最高可达星级。完成后请点击页面底部“计算”。</div>
       </section>
 
       <details class="card group" id="lockGroup">
         <summary><span>锁定穿戴</span><span class="summary-right">可锁定某部位必须穿某套装备；胸和手镯可锁定 70B</span></summary>
         <div class="group-body">
           <div class="lock-grid" id="lockBar"></div>
+          <div class="set-target-bar" id="setTargetBar"></div>
         </div>
       </details>
 
@@ -379,6 +417,8 @@
     </div>
   </div>
 
+  <div class="toast-wrap" id="toastWrap"></div>
+
 <script>
 (() => {
   const SUITS = ['万灵','永恒','残夜','复苏','冰川','纵横','凌云','星辰','万世','天劫','暗夜','时光','逝魔','铁马','上元'];
@@ -409,6 +449,7 @@
   const FULL_MASK = (1 << PARTS.length) - 1;
   const STORAGE_KEY = 'equipment_planner_final_v20260324_top5';
   const CACHE_STORAGE_KEY = 'equipment_planner_cache_slots_v20260324_top10';
+  const CACHE_NAME_STORAGE_KEY = 'equipment_planner_cache_slot_names_v20260324_top10';
   const CACHE_SLOT_COUNT = 10;
 
   const headRow = document.getElementById('headRow');
@@ -457,11 +498,21 @@
   const cacheModal = document.getElementById('cacheModal');
   const cacheSlots = document.getElementById('cacheSlots');
   const cachePreview = document.getElementById('cachePreview');
+  const toastWrap = document.getElementById('toastWrap');
   const cacheCloseBtn = document.getElementById('cacheCloseBtn');
+  const setTargetBar = document.getElementById('setTargetBar');
+  const detailModal = document.getElementById('detailModal');
+  const detailTitle = document.getElementById('detailTitle');
+  const detailBody = document.getElementById('detailBody');
+  const detailPreview = document.getElementById('detailPreview');
+  const detailCloseBtn = document.getElementById('detailCloseBtn');
 
   let inventoryEditing = null;
+  let lastComputedPlans = [];
+  let openSetTargetMenu = '';
   let state = loadState();
   let cacheSlotState = loadCacheSlots();
+  let cacheSlotNames = loadCacheSlotNames();
 
   function defaultMatrix(){ return SUITS.map(() => PARTS.map(() => 0)); }
   function getSuitLabelHtml(suitIndex, full = false){
@@ -473,8 +524,61 @@
   function defaultLocks(){ return PARTS.map(() => null); }
   function defaultDisabledSuits(){ return SUITS.map(() => false); }
   function defaultCurrentWear(){ return PARTS.map(() => ({type:'', suitIndex:null, b70Token:'', star:0})); }
+  function defaultSetTargets(){ return {min2:[], min5:null, min8:null}; }
   function clampInt(value, min, max){ const n = Number.parseInt(value, 10); if(Number.isNaN(n)) return min; return Math.min(max, Math.max(min, n)); }
   function escapeHtml(value){ return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function toSuitIndex(value){
+    const n = Number.parseInt(value, 10);
+    return Number.isInteger(n) && n >= 0 && n < SUITS.length ? n : null;
+  }
+  function sanitizeSetTargets(v){
+    const base = defaultSetTargets();
+    if(!v || typeof v !== 'object') return base;
+    const rawMin2 = Array.isArray(v.min2) ? v.min2 : [];
+    const min2 = [...new Set(rawMin2.map(toSuitIndex).filter(v => v !== null))];
+    const min5 = toSuitIndex(v.min5);
+    const min8 = toSuitIndex(v.min8);
+    return {min2, min5, min8};
+  }
+  function popcount(mask){ let count = 0; let value = mask >>> 0; while(value){ value &= value - 1; count++; } return count; }
+
+  let toastSeq = 0;
+  const toastTimers = new Map();
+
+  function showToast(message, type = 'info', duration = 3000){
+    if(!toastWrap || !message) return;
+    const toast = document.createElement('div');
+    const toastId = `toast-${++toastSeq}`;
+    toast.className = `toast ${type}`;
+    toast.dataset.toastId = toastId;
+    toast.innerHTML = `<div>${escapeHtml(message)}</div><button type="button" class="toast-close" aria-label="关闭">×</button>`;
+    const close = () => removeToast(toastId);
+    toast.querySelector('.toast-close')?.addEventListener('click', close);
+    toastWrap.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    const timer = window.setTimeout(close, duration);
+    toastTimers.set(toastId, timer);
+  }
+
+  function removeToast(toastId){
+    const toast = toastWrap?.querySelector(`[data-toast-id="${toastId}"]`);
+    if(!toast) return;
+    const timer = toastTimers.get(toastId);
+    if(timer){
+      window.clearTimeout(timer);
+      toastTimers.delete(toastId);
+    }
+    toast.classList.remove('show');
+    window.setTimeout(() => toast.remove(), 180);
+  }
+
+  function clearToasts(){
+    if(!toastWrap) return;
+    Array.from(toastWrap.children).forEach(node => {
+      const toastId = node.dataset.toastId;
+      if(toastId) removeToast(toastId);
+    });
+  }
 
   function switchTab(tab){
     const showInput = tab !== 'results';
@@ -485,24 +589,116 @@
     if(!showInput) updateFloatingHeaderVisibility();
   }
   function setResultStatus(message, isError = false){
-    resultStatusBox.textContent = message;
-    resultStatusBox.className = `status${isError ? ' error' : ''}`;
+    if(!message) return;
+    resultStatusBox.classList.toggle('hide', !isError);
+    showToast(message, isError ? 'error' : 'success');
   }
   function renderResultCalcPrompt(){
     resultStatusBox.innerHTML = '<div class="result-status-inline"><span>请点击计算</span><button type="button" class="inline-calc-btn" data-role="result-calc-btn">计算</button></div>';
     resultStatusBox.className = 'status';
+    resultStatusBox.classList.remove('hide');
   }
-  function markDirty(message){
+  function markDirty(message, silent = false){
     lastComputedPlans = [];
+    openSetTargetMenu = '';
     renderHead();
     renderLockBar();
     renderCurrentPanel();
+    renderSetTargetBar();
     renderTable({});
     resultsBox.innerHTML = '';
     bindDynamicEvents();
-    setStatus(message || '输入已更新。修改后不会自动计算，请点击页面底部“计算”。');
+    setStatus(message || '输入已更新。修改后不会自动计算，请点击页面底部“计算”。', false, silent);
     renderResultCalcPrompt();
     updateFloatingHeaderVisibility();
+  }
+
+  function getSelectorDisplayText(type){
+    const list = type === 'disabled' ? state.disabledSuits.map((flag, index) => flag ? index : null).filter(index => index !== null) : state.setTargets.min2;
+    if(type === 'disabled' || type === 'min2'){
+      if(!list.length) return '不限';
+      if(list.length <= 2) return list.map(index => SUITS[index]).join('、');
+      return `${SUITS[list[0]]}、${SUITS[list[1]]}等${list.length}套`;
+    }
+    const suitIndex = state.setTargets[type];
+    return suitIndex === null ? '不限' : SUITS[suitIndex];
+  }
+  function isSelectorSelected(type, suitIndex){
+    if(type === 'disabled') return !!state.disabledSuits[suitIndex];
+    return type === 'min2' ? state.setTargets.min2.includes(suitIndex) : state.setTargets[type] === suitIndex;
+  }
+  function renderSelectorMenu(type){
+    const isMulti = type === 'disabled' || type === 'min2';
+    const clearRow = isMulti
+      ? `<button type="button" class="set-target-clear" data-set-target-clear="${type}">清空选择</button>`
+      : '';
+    const limitRow = !isMulti
+      ? `<button type="button" class="set-target-option" data-set-target-option="${type}" data-suit-index=""><span class="set-target-option-text">不限</span><span class="set-target-check ${state.setTargets[type] === null ? 'show' : ''}">√</span></button>`
+      : '';
+    const optionRows = SUITS.map((name, suitIndex) => `<button type="button" class="set-target-option" data-set-target-option="${type}" data-suit-index="${suitIndex}"><span class="set-target-option-text">${escapeHtml(name)}</span><span class="set-target-check ${isSelectorSelected(type, suitIndex) ? 'show' : ''}">√</span></button>`).join('');
+    return `${clearRow}${limitRow}${optionRows}`;
+  }
+  function renderSetTargetBar(){
+    if(!setTargetBar) return;
+    const configs = [
+      {type:'disabled', label:'禁用', className:'wide'},
+      {type:'min2', label:'至少2件'},
+      {type:'min5', label:'至少5件'},
+      {type:'min8', label:'至少8件'}
+    ];
+    setTargetBar.innerHTML = configs.map(({type, label, className = ''}) => `
+      <div class="set-target-control ${className} ${openSetTargetMenu === type ? 'open' : ''}" data-set-target-control="${type}">
+        <span class="set-target-label">${label}</span>
+        <button type="button" class="set-target-trigger" data-set-target-toggle="${type}">
+          <span class="set-target-trigger-text">${escapeHtml(getSelectorDisplayText(type))}</span>
+          <span class="set-target-trigger-arrow">▼</span>
+        </button>
+        <div class="set-target-menu">${renderSelectorMenu(type)}</div>
+      </div>
+    `).join('');
+  }
+  function closeSetTargetMenus(){
+    if(!openSetTargetMenu) return;
+    openSetTargetMenu = '';
+    renderSetTargetBar();
+  }
+  function toggleSetTargetMenu(type){
+    openSetTargetMenu = openSetTargetMenu === type ? '' : type;
+    renderSetTargetBar();
+  }
+  function updateSetTargetSelection(type, rawSuitIndex){
+    const suitIndex = toSuitIndex(rawSuitIndex);
+    if(type === 'disabled'){
+      if(suitIndex === null) return;
+      state.disabledSuits[suitIndex] = !state.disabledSuits[suitIndex];
+    }else if(type === 'min2'){
+      if(suitIndex === null) return;
+      const next = new Set(state.setTargets.min2);
+      if(next.has(suitIndex)) next.delete(suitIndex);
+      else next.add(suitIndex);
+      state.setTargets.min2 = [...next].sort((a, b) => a - b);
+    }else{
+      state.setTargets[type] = suitIndex;
+      openSetTargetMenu = '';
+    }
+    saveState();
+    markDirty(type === 'disabled' ? '禁用套装已更新，请点击页面底部“计算”。' : '套装件数约束已更新，请点击页面底部“计算”。');
+  }
+  function clearSetTargetSelection(type){
+    if(type === 'disabled') state.disabledSuits = defaultDisabledSuits();
+    else if(type === 'min2') state.setTargets.min2 = [];
+    else state.setTargets[type] = null;
+    openSetTargetMenu = '';
+    saveState();
+    markDirty(type === 'disabled' ? '禁用套装已更新，请点击页面底部“计算”。' : '套装件数约束已更新，请点击页面底部“计算”。');
+  }
+  function getRequiredCountBySuit(){
+
+    const required = Array(SUITS.length).fill(0);
+    state.setTargets.min2.forEach(suitIndex => { required[suitIndex] = Math.max(required[suitIndex], 2); });
+    if(state.setTargets.min5 !== null) required[state.setTargets.min5] = Math.max(required[state.setTargets.min5], 5);
+    if(state.setTargets.min8 !== null) required[state.setTargets.min8] = Math.max(required[state.setTargets.min8], 8);
+    return required;
   }
 
   function loadState(){
@@ -514,10 +710,11 @@
         locks: sanitizeLocks(raw.locks),
         disabledSuits: sanitizeDisabledSuits(raw.disabledSuits),
         currentScore: sanitizeCurrentScore(raw.currentScore),
-        currentWear: sanitizeCurrentWear(raw.currentWear)
+        currentWear: sanitizeCurrentWear(raw.currentWear),
+        setTargets: sanitizeSetTargets(raw.setTargets)
       };
     } catch {
-      return {stars:defaultMatrix(), inventory:defaultInventory(), locks:defaultLocks(), disabledSuits:defaultDisabledSuits(), currentScore:'', currentWear:defaultCurrentWear()};
+      return {stars:defaultMatrix(), inventory:defaultInventory(), locks:defaultLocks(), disabledSuits:defaultDisabledSuits(), currentScore:'', currentWear:defaultCurrentWear(), setTargets:defaultSetTargets()};
     }
   }
   function sanitizeMatrix(v){
@@ -569,7 +766,8 @@
       locks: sanitizeLocks(src.locks),
       disabledSuits: sanitizeDisabledSuits(src.disabledSuits),
       currentScore: sanitizeCurrentScore(src.currentScore),
-      currentWear: sanitizeCurrentWear(src.currentWear)
+      currentWear: sanitizeCurrentWear(src.currentWear),
+      setTargets: sanitizeSetTargets(src.setTargets)
     };
   }
   function loadCacheSlots(){
@@ -585,11 +783,44 @@
       return defaultCacheSlots();
     }
   }
+  function sanitizeCacheSlotName(value){
+    return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 24);
+  }
+  function loadCacheSlotNames(){
+    try {
+      const raw = JSON.parse(localStorage.getItem(CACHE_NAME_STORAGE_KEY) || '[]');
+      if(!Array.isArray(raw)) return Array.from({length:CACHE_SLOT_COUNT}, () => '');
+      return Array.from({length:CACHE_SLOT_COUNT}, (_, index) => sanitizeCacheSlotName(raw[index]));
+    } catch {
+      return Array.from({length:CACHE_SLOT_COUNT}, () => '');
+    }
+  }
+  function saveCacheSlotNames(){
+    localStorage.setItem(CACHE_NAME_STORAGE_KEY, JSON.stringify(cacheSlotNames));
+  }
+  function getCacheSlotDisplayName(slotIndex){
+    return sanitizeCacheSlotName(cacheSlotNames[slotIndex]) || `缓存 ${slotIndex + 1}`;
+  }
+  function updateCacheSlotName(slotIndex, value, silent = false){
+    cacheSlotNames[slotIndex] = sanitizeCacheSlotName(value);
+    saveCacheSlotNames();
+    if(!silent){
+      setCachePreview(`${getCacheSlotDisplayName(slotIndex)} 的名称已更新。`);
+    }
+  }
   function saveCacheSlots(){
     localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(cacheSlotState));
   }
   function cloneCurrentState(){
-    return sanitizeStateSnapshot(JSON.parse(JSON.stringify(state)));
+    return {
+      stars: sanitizeMatrix(JSON.parse(JSON.stringify(state.stars))),
+      inventory: sanitizeInventory(JSON.parse(JSON.stringify(state.inventory))),
+      locks: sanitizeLocks(JSON.parse(JSON.stringify(state.locks))),
+      disabledSuits: sanitizeDisabledSuits(JSON.parse(JSON.stringify(state.disabledSuits))),
+      currentScore: sanitizeCurrentScore(state.currentScore),
+      currentWear: sanitizeCurrentWear(JSON.parse(JSON.stringify(state.currentWear))),
+      setTargets: sanitizeSetTargets(JSON.parse(JSON.stringify(state.setTargets)))
+    };
   }
 
   function normalizeLockValue(partIndex, value){
@@ -863,7 +1094,7 @@
         const badgesClass = `badges${ranks.length > 3 ? ' badges-crowded' : ''}`;
         return `<td class="${tdClass}"><div class="cell"><input class="star-input" type="number" min="0" max="5" step="1" inputmode="numeric" value="${state.stars[suitIndex][partIndex]}" data-suit="${suitIndex}" data-part="${partIndex}"><button class="mini ${hasInventory ? 'active' : ''}" type="button" data-action="inventory" data-suit="${suitIndex}" data-part="${partIndex}" tabindex="-1">★</button><div class="${badgesClass}">${badges}</div></div></td>`;
       }).join('');
-      const head = `<div class="suit-cell">${getSuitLabelHtml(suitIndex)}<label class="suit-disable"><input type="checkbox" class="disable-suit-input" data-suit="${suitIndex}" ${disabled ? 'checked' : ''}>禁用</label></div>`;
+      const head = `<div class="suit-cell">${getSuitLabelHtml(suitIndex)}${disabled ? '<span class="suit-disabled-tag">已禁</span>' : ''}</div>`;
       return `<tr class="${disabled ? 'suit-disabled' : ''}"><th>${head}</th>${cols}</tr>`;
     }).join('');
   }
@@ -895,14 +1126,18 @@
     return {allowed, fixedB70};
   }
 
-  function precomputeSubsetScores(allowed, remainingMask){
+  function precomputeSubsetScores(allowed, remainingMask, requiredCounts){
     const subsetScores = Array.from({length: SUITS.length}, () => Array(1 << PARTS.length).fill(Number.NEGATIVE_INFINITY));
     for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
       const disabled = !!state.disabledSuits[suitIndex];
-      subsetScores[suitIndex][0] = 0;
+      const minRequired = requiredCounts[suitIndex] || 0;
+      subsetScores[suitIndex][0] = minRequired === 0 ? 0 : Number.NEGATIVE_INFINITY;
       for(let submask = remainingMask; ; submask = (submask - 1) & remainingMask){
         if(submask !== 0){
-          if(disabled && ((submask & (submask - 1)) !== 0)){
+          const pieceCount = popcount(submask);
+          if(pieceCount < minRequired){
+            // 不满足至少 N 件要求
+          } else if(disabled && ((submask & (submask - 1)) !== 0)){
             // 勾选禁用后，该套装最多只能装备 1 件
           } else {
             let base = 0; let feasible = true; const stars = [];
@@ -968,7 +1203,27 @@
     let fixedBase = 0; let fixedMask = 0;
     for(const option of B70_OPTIONS){ if(fixedB70[option.partIndex]){ fixedBase += option.score; fixedMask |= (1 << option.partIndex); } }
     const remainingMask = FULL_MASK ^ fixedMask;
-    const subsetScores = precomputeSubsetScores(allowed, remainingMask);
+    const requiredCounts = getRequiredCountBySuit();
+    const availableSlots = popcount(remainingMask);
+    const requiredTotal = requiredCounts.reduce((sum, value) => sum + value, 0);
+    if(requiredTotal > availableSlots){
+      return {error:`当前至少N件条件与固定穿戴冲突：最少需要 ${requiredTotal} 件，但当前可分配部位只有 ${availableSlots} 件。`};
+    }
+    for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
+      const need = requiredCounts[suitIndex];
+      if(need <= 0) continue;
+      if(state.disabledSuits[suitIndex] && need > 1){
+        return {error:`套装“${SUITS[suitIndex]}”已勾选禁用，最多只能穿 1 件，无法满足至少 ${need} 件。`};
+      }
+      let canUseCount = 0;
+      for(let partIndex = 0; partIndex < PARTS.length; partIndex++){
+        if((remainingMask >> partIndex) & 1 && allowed[suitIndex][partIndex]) canUseCount++;
+      }
+      if(canUseCount < need){
+        return {error:`套装“${SUITS[suitIndex]}”当前最多只能穿 ${canUseCount} 件，无法满足至少 ${need} 件。`};
+      }
+    }
+    const subsetScores = precomputeSubsetScores(allowed, remainingMask, requiredCounts);
     const dp = Array.from({length: SUITS.length + 1}, () => Array.from({length: 1 << PARTS.length}, () => []));
     dp[0][0] = [{score: 0, prevMask: null, prevRank: null, submask: 0}];
     for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
@@ -987,10 +1242,10 @@
       }
     }
     const finals = dp[SUITS.length][remainingMask];
-    if(!finals.length) return {error:'当前数据下找不到满足 11 个部位全都穿齐的方案。'};
+    if(!finals.length) return {error:'当前套装件数条件下找不到满足要求的方案。'};
     const plans = finals.map((entry, idx) => {
       const plan = reconstructPlan(dp, entry, idx, fixedB70);
-      plan.totalScore += fixedBase * 0; // fixedBase already included in reconstructPlan baseScore
+      plan.totalScore += fixedBase * 0;
       return plan;
     });
     return {plans};
@@ -1054,9 +1309,10 @@
     resultsBox.innerHTML = blocks.join('');
   }
 
-  function setStatus(message, isError = false){
+  function setStatus(message, isError = false, silent = false){
     statusBox.textContent = message;
-    statusBox.className = `status${isError ? ' error' : ''}`;
+    statusBox.className = `status hide${isError ? ' error' : ''}`;
+    if(!silent && message) showToast(message, isError ? 'error' : 'success');
   }
 
   function getAllStarInputs(){ return Array.from(document.querySelectorAll('.star-input')); }
@@ -1085,14 +1341,14 @@
           state.stars[suitIndex][partIndex] = 0;
           event.target.value = '';
           saveState();
-          markDirty();
+          markDirty('', true);
           return;
         }
         const value = clampInt(sanitized, 0, 5);
         state.stars[suitIndex][partIndex] = value;
         event.target.value = value;
         saveState();
-        markDirty();
+        markDirty('', true);
         if(currentIndex >= 0) setTimeout(() => focusStarInputByIndex(currentIndex + 1), 0);
       };
       input.onkeydown = event => {
@@ -1106,14 +1362,6 @@
     });
     document.querySelectorAll('[data-action="inventory"]').forEach(btn => {
       btn.onclick = event => openInventoryModal(Number(event.currentTarget.dataset.suit), Number(event.currentTarget.dataset.part));
-    });
-    document.querySelectorAll('.disable-suit-input').forEach(input => {
-      input.onchange = event => {
-        const suitIndex = Number(event.target.dataset.suit);
-        state.disabledSuits[suitIndex] = !!event.target.checked;
-        saveState();
-        markDirty(event.target.checked ? `已禁用“${SUITS[suitIndex]}”多件穿戴，该套装现在最多只能装备 1 件。` : `已取消“${SUITS[suitIndex]}”禁用限制，请点击页面底部“计算”。`);
-      };
     });
   }
 
@@ -1226,14 +1474,17 @@
   function setImportPreview(message, isError = false){
     importPreview.textContent = message;
     importPreview.classList.toggle('error', !!isError);
+    if(message) showToast(message, isError ? 'error' : 'info');
   }
   function setExportPreview(message, isError = false){
     exportPreview.textContent = message;
     exportPreview.classList.toggle('error', !!isError);
+    if(message) showToast(message, isError ? 'error' : 'info');
   }
   function setCachePreview(message, isError = false){
     cachePreview.textContent = message;
     cachePreview.classList.toggle('error', !!isError);
+    if(message) showToast(message, isError ? 'error' : 'info');
   }
   function formatCacheTime(value){
     if(!value) return '未保存';
@@ -1245,18 +1496,32 @@
   function countFilledCells(matrix){
     return matrix.reduce((total, row) => total + row.filter(v => Number(v) > 0).length, 0);
   }
+  function countLockSelections(locks){
+    return Array.isArray(locks) ? locks.filter(Boolean).length : 0;
+  }
+  function countCurrentWearSelections(currentWear){
+    return Array.isArray(currentWear) ? currentWear.filter(item => item && item.type).length : 0;
+  }
   function renderCacheSlots(){
     cacheSlots.innerHTML = cacheSlotState.map((entry, index) => {
       const filled = entry ? countFilledCells(entry.data.stars) : 0;
+      const lockCount = entry ? countLockSelections(entry.data.locks) : 0;
+      const currentWearCount = entry ? countCurrentWearSelections(entry.data.currentWear) : 0;
       const currentScoreText = entry && String(entry.data.currentScore || '').trim() !== '' && Number(entry.data.currentScore) > 0 ? Number(entry.data.currentScore).toLocaleString() : '未录入';
+      const displayName = getCacheSlotDisplayName(index);
+      const rawName = sanitizeCacheSlotName(cacheSlotNames[index]) || displayName;
       const meta = entry
-        ? `保存时间：${formatCacheTime(entry.savedAt)}｜主表已填 ${filled}/${SUITS.length * PARTS.length} 格｜当前抗魔：${currentScoreText}`
-        : '当前为空，可把本页数据保存到这里。';
+        ? `保存时间：${formatCacheTime(entry.savedAt)}｜主表已填 ${filled}/${SUITS.length * PARTS.length} 格｜锁定穿戴 ${lockCount} 项｜当前穿戴 ${currentWearCount} 项｜当前抗魔：${currentScoreText}`
+        : '当前为空，可把本页数据保存到这里（包含主表、锁定穿戴、当前穿戴、至少N件等设置）。';
       return `<div class="cache-slot${entry ? '' : ' empty'}">
         <div class="cache-slot-top">
           <div>
-            <div class="cache-slot-title">缓存 ${index + 1}</div>
+            <div class="cache-slot-name-row">
+              <input class="cache-slot-name-input" type="text" maxlength="24" data-cache-name-input="${index}" value="${escapeHtml(rawName)}" placeholder="缓存 ${index + 1}">
+              <div class="cache-slot-title">槽位 ${index + 1}</div>
+            </div>
             <div class="cache-slot-meta">${meta}</div>
+            <div class="cache-slot-name-tip">输入名称后按回车或点别处即可保存名称。</div>
           </div>
           <div class="cache-slot-actions">
             <button type="button" class="primary" data-cache-action="save" data-slot="${index}">保存到这里</button>
@@ -1275,10 +1540,25 @@
         if(action === 'delete') deleteCacheSlot(slotIndex);
       });
     });
+    cacheSlots.querySelectorAll('[data-cache-name-input]').forEach(input => {
+      const slotIndex = Number(input.dataset.cacheNameInput);
+      input.addEventListener('change', () => {
+        updateCacheSlotName(slotIndex, input.value);
+        const nextValue = sanitizeCacheSlotName(cacheSlotNames[slotIndex]) || getCacheSlotDisplayName(slotIndex);
+        if(input.value !== nextValue) input.value = nextValue;
+      });
+      input.addEventListener('keydown', event => {
+        if(event.key === 'Enter'){
+          event.preventDefault();
+          input.blur();
+        }
+      });
+    });
   }
   function openCacheModal(){
     renderCacheSlots();
-    setCachePreview('请选择一个缓存位进行保存、读取或删除。');
+    cachePreview.textContent = '请选择一个缓存位进行保存、读取或删除。缓存名称可直接编辑，缓存会保留主表、锁定穿戴、当前穿戴和至少N件设置。';
+    cachePreview.classList.remove('error');
     cacheModal.classList.add('show');
   }
   function closeCacheModal(){
@@ -1288,33 +1568,34 @@
     cacheSlotState[slotIndex] = {savedAt: new Date().toISOString(), data: cloneCurrentState()};
     saveCacheSlots();
     renderCacheSlots();
-    setCachePreview(`当前数据已保存到缓存 ${slotIndex + 1}。`);
+    setCachePreview(`当前数据已保存到${getCacheSlotDisplayName(slotIndex)}，并已包含锁定穿戴和当前穿戴数据。`);
   }
   function loadFromCacheSlot(slotIndex){
     const entry = cacheSlotState[slotIndex];
     if(!entry){
-      setCachePreview(`缓存 ${slotIndex + 1} 为空。`, true);
+      setCachePreview(`${getCacheSlotDisplayName(slotIndex)} 为空。`, true);
       return;
     }
-    state = sanitizeStateSnapshot(entry);
+    state = sanitizeStateSnapshot(entry.data || entry);
     saveState();
     closeCacheModal();
-    markDirty(`已读取缓存 ${slotIndex + 1}，请点击页面底部“计算”。`);
+    markDirty(`已读取${getCacheSlotDisplayName(slotIndex)}，锁定穿戴和当前穿戴也已一并恢复，请点击页面底部“计算”。`);
   }
   function deleteCacheSlot(slotIndex){
     if(!cacheSlotState[slotIndex]){
-      setCachePreview(`缓存 ${slotIndex + 1} 为空。`, true);
+      setCachePreview(`${getCacheSlotDisplayName(slotIndex)} 为空。`, true);
       return;
     }
     cacheSlotState[slotIndex] = null;
     saveCacheSlots();
     renderCacheSlots();
-    setCachePreview(`缓存 ${slotIndex + 1} 已删除。`);
+    setCachePreview(`${getCacheSlotDisplayName(slotIndex)} 已删除，名称已保留。`);
   }
 
   function openImportModal(){
     importTextarea.value = getImportTemplate();
-    setImportPreview('请检查每行是否都带 11 位数字。');
+    importPreview.textContent = '请检查每行是否都带 11 位数字。';
+    importPreview.classList.remove('error');
     importModal.classList.add('show');
     setTimeout(() => {
       importTextarea.focus();
@@ -1326,7 +1607,8 @@
   }
   function openExportModal(){
     exportTextarea.value = getExportText();
-    setExportPreview('可直接复制当前列表数据。');
+    exportPreview.textContent = '可直接复制当前列表数据。';
+    exportPreview.classList.remove('error');
     exportModal.classList.add('show');
     setTimeout(() => {
       exportTextarea.focus();
@@ -1477,8 +1759,10 @@
 
   function computeAndRender(switchToResults = false){
     saveState();
+    openSetTargetMenu = '';
     renderHead();
     renderLockBar();
+    renderSetTargetBar();
     const currentEval = renderCurrentPanel();
     const result = computeTopPlans();
     if(result.error){
@@ -1505,7 +1789,13 @@
 
 
   function clearTableData(){ state.stars = defaultMatrix(); state.inventory = defaultInventory(); saveState(); markDirty('主表数据已清空，请点击页面底部“计算”。'); }
-  function clearLocks(){ state.locks = defaultLocks(); saveState(); markDirty('锁定已清空，请点击页面底部“计算”。'); }
+  function clearLocks(){
+    state.locks = defaultLocks();
+    state.disabledSuits = defaultDisabledSuits();
+    state.setTargets = defaultSetTargets();
+    saveState();
+    markDirty('锁定、禁用和至少N件约束已清空，请点击页面底部“计算”。');
+  }
   function clearCurrent(){ state.currentScore = ''; state.currentWear = defaultCurrentWear(); saveState(); markDirty('当前装备和抗魔已清空，请点击页面底部“计算”。'); }
   function fillRandom(){ state.stars = SUITS.map(() => PARTS.map(() => Math.floor(Math.random() * 6))); state.inventory = defaultInventory(); saveState(); markDirty('已填入随机测试数据，请点击页面底部“计算”。'); }
 
@@ -1526,6 +1816,25 @@
       }
     });
     document.addEventListener('click', event => {
+      const toggleBtn = event.target.closest('[data-set-target-toggle]');
+      if(toggleBtn){
+        event.stopPropagation();
+        toggleSetTargetMenu(toggleBtn.dataset.setTargetToggle);
+        return;
+      }
+      const clearBtn = event.target.closest('[data-set-target-clear]');
+      if(clearBtn){
+        event.stopPropagation();
+        clearSetTargetSelection(clearBtn.dataset.setTargetClear);
+        return;
+      }
+      const optionBtn = event.target.closest('[data-set-target-option]');
+      if(optionBtn){
+        event.stopPropagation();
+        updateSetTargetSelection(optionBtn.dataset.setTargetOption, optionBtn.dataset.suitIndex);
+        return;
+      }
+      if(!event.target.closest('.set-target-control')) closeSetTargetMenus();
       const detailBtn = event.target.closest('[data-detail-type]');
       if(!detailBtn) return;
       const type = detailBtn.dataset.detailType;
@@ -1581,6 +1890,7 @@
   renderHead();
   renderLockBar();
   renderCurrentPanel();
+  renderSetTargetBar();
   renderTable({});
   bindDynamicEvents();
   renderResultCalcPrompt();
