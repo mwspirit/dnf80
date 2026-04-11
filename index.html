@@ -405,7 +405,7 @@
   <div class="modal" id="recognitionModal">
     <div class="modal-card recognition-card">
       <h3 class="modal-title">识别图片导入（实验版）</h3>
-      <p class="modal-sub">上传固定版式截图后，系统会优先识别每套 11 个部位的星级，并尽量自动识别套装名称。识别结果会先展示给你检查；确认无误后，再导入到主表中。</p>
+      <p class="modal-sub">上传固定版式截图后，系统会优先识别每套 11 个部位的星级，并尽量自动识别套装名称。识别结果会先展示给你检查；星级数字串支持直接自由编辑，确认无误后再导入到主表中。</p>
       <div class="recognition-top">
         <div class="recognition-uploader">
           <input id="recognitionFileInput" class="recognition-file" type="file" accept="image/*">
@@ -714,6 +714,10 @@
   function sanitizeRecognitionDigits(value){
     return String(value ?? '').replace(/[^0-5]/g, '').slice(0, 11);
   }
+  function getRecognitionEditableDigitsString(row){
+    if(row && typeof row.digitsTextRaw === 'string') return row.digitsTextRaw;
+    return getRecognitionDigitsString(row);
+  }
   const RECOGNITION_DISPLAY_ORDER = [0,1,2,3,4,6,5,7,8,9,10];
   function standardDigitsToDisplayDigits(digits){
     const source = Array.isArray(digits) ? digits.map(v => clampInt(v, 0, 5)) : sanitizeRecognitionDigits(digits).padEnd(11, '0').slice(0, 11).split('').map(v => Number(v));
@@ -750,7 +754,7 @@
           <option value="">请选择套装</option>
           ${SUITS.map((name, suitIndex) => `<option value="${suitIndex}" ${row.suitIndex === suitIndex ? 'selected' : ''}>${name}</option>`).join('')}
         </select>
-        <input class="recognition-code-input" type="text" inputmode="numeric" maxlength="11" value="${escapeHtml(getRecognitionDigitsString(row))}" data-recognition-digits="${index}">
+        <input class="recognition-code-input" type="text" value="${escapeHtml(getRecognitionEditableDigitsString(row))}" data-recognition-digits="${index}">
       </div>
     `}).join('');
     recognitionGrid.querySelectorAll('[data-recognition-suit]').forEach(select => {
@@ -762,9 +766,7 @@
     recognitionGrid.querySelectorAll('[data-recognition-digits]').forEach(input => {
       input.addEventListener('input', event => {
         const index = Number(event.target.dataset.recognitionDigits);
-        const digits = sanitizeRecognitionDigits(event.target.value);
-        recognitionRows[index].digits = displayDigitsToStandardDigits(digits);
-        event.target.value = getRecognitionDigitsString(recognitionRows[index]);
+        recognitionRows[index].digitsTextRaw = event.target.value;
       });
     });
   }
@@ -924,6 +926,37 @@
   function getImageDataFromCanvas(canvas){
     return canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
   }
+  function collectRecognitionPeaks(smooth, threshold, minDistance){
+    const peaks = [];
+    let lastPeak = -minDistance;
+    for(let y = 3; y < smooth.length - 3; y++){
+      const value = smooth[y];
+      if(value < threshold) continue;
+      if(value <= smooth[y - 1] || value < smooth[y + 1]) continue;
+      if(y - lastPeak < minDistance){
+        if(peaks.length && value > peaks[peaks.length - 1].score){
+          peaks[peaks.length - 1] = {y, score:value};
+          lastPeak = y;
+        }
+        continue;
+      }
+      peaks.push({y, score:value});
+      lastPeak = y;
+    }
+    return peaks.sort((a, b) => a.y - b.y);
+  }
+  function findMissingRecognitionPeak(smooth, center, radius, minScore){
+    const start = Math.max(3, Math.round(center - radius));
+    const end = Math.min(smooth.length - 4, Math.round(center + radius));
+    let best = null;
+    for(let y = start; y <= end; y++){
+      const value = smooth[y];
+      if(value < minScore) continue;
+      if(value <= smooth[y - 1] || value < smooth[y + 1]) continue;
+      if(!best || value > best.score) best = {y, score:value};
+    }
+    return best;
+  }
   function detectRecognitionPeaks(imageData){
     const {width, height, data} = imageData;
     const xStart = Math.max(0, Math.round(RECOGNITION_LINE_X_START * width / RECOGNITION_BASE_WIDTH));
@@ -955,25 +988,24 @@
     });
     const maxScore = Math.max(...smooth);
     const minScore = Math.min(...smooth);
-    const threshold = minScore + (maxScore - minScore) * 0.62;
-    const minDistance = Math.max(220, Math.round(height / 28));
-    const peaks = [];
-    let lastPeak = -minDistance;
-    for(let y = 3; y < height - 3; y++){
-      const value = smooth[y];
-      if(value < threshold) continue;
-      if(value <= smooth[y - 1] || value < smooth[y + 1]) continue;
-      if(y - lastPeak < minDistance){
-        if(peaks.length && value > peaks[peaks.length - 1].score){
-          peaks[peaks.length - 1] = {y, score:value};
-          lastPeak = y;
-        }
-        continue;
-      }
-      peaks.push({y, score:value});
-      lastPeak = y;
+    const threshold = minScore + (maxScore - minScore) * 0.55;
+    const minDistance = Math.max(68, Math.min(140, Math.round(height / 24)));
+    let peaks = collectRecognitionPeaks(smooth, threshold, minDistance);
+    if(peaks.length === SUITS.length - 1 && peaks.length >= 2){
+      const gaps = [];
+      for(let i = 1; i < peaks.length; i++) gaps.push(peaks[i].y - peaks[i - 1].y);
+      const sortedGaps = [...gaps].sort((a, b) => a - b);
+      const expectedGap = sortedGaps[Math.floor(sortedGaps.length / 2)] || Math.round(height / SUITS.length);
+      const radius = Math.max(24, Math.round(expectedGap * 0.28));
+      const candidateBottom = findMissingRecognitionPeak(smooth, peaks[peaks.length - 1].y + expectedGap, radius, threshold * 0.92);
+      const candidateTop = findMissingRecognitionPeak(smooth, peaks[0].y - expectedGap, radius, threshold * 0.92);
+      const canUseBottom = !!candidateBottom && candidateBottom.y > peaks[peaks.length - 1].y + Math.max(18, Math.round(expectedGap * 0.45));
+      const canUseTop = !!candidateTop && candidateTop.y < peaks[0].y - Math.max(18, Math.round(expectedGap * 0.45));
+      if(canUseBottom && (!canUseTop || candidateBottom.score >= candidateTop.score)) peaks.push(candidateBottom);
+      else if(canUseTop) peaks.unshift(candidateTop);
+      peaks = peaks.sort((a, b) => a.y - b.y);
     }
-    return peaks.sort((a, b) => a.y - b.y).slice(0, 15).map(item => item.y);
+    return peaks.slice(0, SUITS.length).map(item => item.y);
   }
   function isGoldPixel(r, g, b){
     const max = Math.max(r, g, b);
@@ -1162,13 +1194,17 @@
         throw new Error('没有识别到足够多的套装分隔线。请确认上传的是完整长图。');
       }
       setRecognitionProgress(`已识别到 ${peaks.length} 套，正在统计星级...`);
-      recognitionRows = peaks.map((peakY, index) => ({
-        order:index,
-        suitIndex:null,
-        digits: buildRecognitionDigits(canvas, peakY),
-        ocrText:'',
-        ocrTextDisplay:''
-      }));
+      recognitionRows = peaks.map((peakY, index) => {
+        const digits = buildRecognitionDigits(canvas, peakY);
+        return {
+          order:index,
+          suitIndex:null,
+          digits,
+          digitsTextRaw: standardDigitsToDisplayDigits(digits).join(''),
+          ocrText:'',
+          ocrTextDisplay:''
+        };
+      });
       renderRecognitionRows();
       setRecognitionPreview(`星级识别完成，共 ${recognitionRows.length} 套。左侧显示的是当前裁切到的标题原文；若下拉框已自动选中正确套装，直接确认导入即可。`);
       let ocrResults = [];
@@ -1218,12 +1254,15 @@
         showToast(`套装“${SUITS[row.suitIndex]}”被重复选择了。`, 'error');
         return;
       }
-      const displayDigits = getRecognitionDigitsString(row);
+      const rawDigitsText = getRecognitionEditableDigitsString(row);
+      const displayDigits = String(rawDigitsText ?? '').trim();
       if(!/^[0-5]{11}$/.test(displayDigits)){
-        setRecognitionPreview(`第 ${index + 1} 套的 11 位数字不合法。`, true);
-        showToast(`第 ${index + 1} 套的 11 位数字不合法。`, 'error');
+        setRecognitionPreview(`第 ${index + 1} 套的星级数字串必须是 11 位 0-5 数字。当前内容：${displayDigits || '空'}`, true);
+        showToast(`第 ${index + 1} 套的星级数字串必须是 11 位 0-5 数字。`, 'error');
         return;
       }
+      row.digits = displayDigitsToStandardDigits(displayDigits);
+      row.digitsTextRaw = displayDigits;
       matrix[row.suitIndex] = displayDigitsToStandardDigits(displayDigits);
       used.add(row.suitIndex);
     }
