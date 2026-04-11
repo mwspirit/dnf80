@@ -223,6 +223,28 @@
     .toast.info{border-color:#cfe0ff;background:#f8fbff;color:#1e3a8a}
     .toast-close{margin-left:auto;border:0;background:transparent;color:inherit;font-size:16px;line-height:1;cursor:pointer;padding:0 0 0 6px}
 
+
+    .recognition-card{width:min(980px,100%);display:flex;flex-direction:column;max-height:calc(100vh - 28px);overflow:auto}
+    .recognition-top{display:grid;grid-template-columns:minmax(260px,320px) minmax(0,1fr);gap:12px;align-items:start}
+    .recognition-uploader{border:1px dashed #cdd5e1;border-radius:14px;background:#fbfdff;padding:12px;display:grid;gap:10px}
+    .recognition-file{width:100%}
+    .recognition-help{border:1px solid var(--line);border-radius:12px;background:#f8fbff;padding:12px;font-size:13px;line-height:1.75;color:var(--muted)}
+    .recognition-help b{color:var(--text)}
+    .recognition-highlight{color:var(--red);font-weight:900}
+    .recognition-progress{font-size:14px;font-weight:800;color:var(--blue)}
+    .recognition-progress.error{color:var(--red)}
+    .recognition-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+    .recognition-row{display:grid;grid-template-columns:auto 136px minmax(180px,1fr);gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;background:#fbfdff;padding:8px}
+    .recognition-select,.recognition-code-input{
+      width:100%;height:40px;border:1px solid #cdd5e1;border-radius:10px;background:#fff;padding:0 10px;font-size:14px;outline:none
+    }
+    .recognition-code-input{font-family:"Consolas","Courier New","Microsoft YaHei",monospace;letter-spacing:1px}
+    .recognition-select:focus,.recognition-code-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+    .recognition-name-box{min-width:0}
+    .recognition-name-main{font-size:14px;font-weight:900;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .recognition-warning{margin-top:10px;padding:8px 10px;border:1px solid #f3d27c;border-radius:12px;background:#fff9e8;font-size:12px;line-height:1.6;color:#8a6700}
+    .recognition-card .modal-bottom{position:sticky;bottom:0;background:#fff;padding-top:10px;margin-top:12px;border-top:1px solid var(--line)}
+
     @media (max-width:1200px){
       .lock-grid,.current-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
     }
@@ -234,6 +256,9 @@
       .toolbar button{flex:1 1 calc(50% - 5px);font-size:15px;min-height:48px}
       .lock-grid,.current-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
       .current-top{grid-template-columns:1fr}
+      .recognition-top{grid-template-columns:1fr}
+      .recognition-grid{grid-template-columns:1fr}
+      .recognition-row{grid-template-columns:1fr}
       .summary-row{grid-template-columns:repeat(2,minmax(0,1fr))}
       .current-controls{grid-template-columns:minmax(0,1fr) 76px}
       table{width:max(100%,943px);min-width:943px}
@@ -317,6 +342,7 @@
           </table>
         </div>
         <div class="table-actions">
+          <button id="imageImportBtn" type="button">识别图片导入</button>
           <button id="importBtn" type="button">批量导入数据</button>
           <button id="exportBtn" type="button">导出数据</button>
         </div>
@@ -375,6 +401,34 @@
     </div>
   </div>
 
+
+  <div class="modal" id="recognitionModal">
+    <div class="modal-card recognition-card">
+      <h3 class="modal-title">识别图片导入（实验版）</h3>
+      <p class="modal-sub">上传固定版式截图后，系统会优先识别每套 11 个部位的星级，并尽量自动识别套装名称。识别结果会先展示给你检查；确认无误后，再导入到主表中。</p>
+      <div class="recognition-top">
+        <div class="recognition-uploader">
+          <input id="recognitionFileInput" class="recognition-file" type="file" accept="image/*">
+          <div class="recognition-progress" id="recognitionProgress">尚未开始识别。</div>
+        </div>
+        <div class="recognition-help">
+          <div><b>识别规则</b></div>
+          <div>识别出的 11 位数字顺序为：胸、腿、肩、腰、鞋、<span class="recognition-highlight">项链、手镯</span>、戒指、辅助装备、魔法石、耳环。</div>
+        </div>
+      </div>
+      <div class="recognition-warning">这是实验版功能。星级识别针对固定截图样式做了专项适配；若你上传的是其他界面、缩略图或裁切过的图片，结果可能不准。</div>
+      <div class="recognition-grid" id="recognitionGrid"></div>
+      <div class="modal-bottom">
+        <div class="preview" id="recognitionPreview">请先选择图片，然后点击“开始识别”。</div>
+        <div class="modal-actions">
+          <button type="button" id="recognitionStartBtn">开始识别</button>
+          <button type="button" id="recognitionCancel">取消</button>
+          <button type="button" class="primary" id="recognitionConfirm">确认导入</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="exportModal">
     <div class="modal-card import-card">
       <h3 class="modal-title">导出数据</h3>
@@ -419,6 +473,7 @@
 
   <div class="toast-wrap" id="toastWrap"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 (() => {
   const SUITS = ['万灵','永恒','残夜','复苏','冰川','纵横','凌云','星辰','万世','天劫','暗夜','时光','逝魔','铁马','上元'];
@@ -471,6 +526,7 @@
   const resultsTabPanel = document.getElementById('resultsTabPanel');
   const resultStatusBox = document.getElementById('resultStatusBox');
   const randomBtn = document.getElementById('randomBtn');
+  const imageImportBtn = document.getElementById('imageImportBtn');
   const importBtn = document.getElementById('importBtn');
   const clearTableBtn = document.getElementById('clearTableBtn');
   const clearLocksBtn = document.getElementById('clearLocksBtn');
@@ -485,6 +541,15 @@
   const modalConfirm = document.getElementById('modalConfirm');
   const importModal = document.getElementById('importModal');
   const importTextarea = document.getElementById('importTextarea');
+  const recognitionModal = document.getElementById('recognitionModal');
+  const recognitionFileInput = document.getElementById('recognitionFileInput');
+  const recognitionThumbBox = document.getElementById('recognitionThumbBox');
+  const recognitionProgress = document.getElementById('recognitionProgress');
+  const recognitionGrid = document.getElementById('recognitionGrid');
+  const recognitionPreview = document.getElementById('recognitionPreview');
+  const recognitionStartBtn = document.getElementById('recognitionStartBtn');
+  const recognitionCancel = document.getElementById('recognitionCancel');
+  const recognitionConfirm = document.getElementById('recognitionConfirm');
   const importPreview = document.getElementById('importPreview');
   const copyTemplateBtn = document.getElementById('copyTemplateBtn');
   const importCancel = document.getElementById('importCancel');
@@ -510,6 +575,10 @@
   let inventoryEditing = null;
   let lastComputedPlans = [];
   let openSetTargetMenu = '';
+  let recognitionImageFile = null;
+  let recognitionImageUrl = '';
+  let recognitionRows = [];
+  let recognitionBusy = false;
   let state = loadState();
   let cacheSlotState = loadCacheSlots();
   let cacheSlotNames = loadCacheSlotNames();
@@ -578,6 +647,585 @@
       const toastId = node.dataset.toastId;
       if(toastId) removeToast(toastId);
     });
+  }
+
+
+  const RECOGNITION_BASE_WIDTH = 884;
+  const RECOGNITION_LINE_X_START = 18;
+  const RECOGNITION_LINE_X_END = 860;
+  const RECOGNITION_CELL_LAYOUT = {
+    xLefts:[30,239,447,656],
+    yOffsets:[38,248,458],
+    width:196,
+    height:191,
+    entries:[
+      {row:0,col:0,partIndex:PART_INDEX['胸']},
+      {row:0,col:1,partIndex:PART_INDEX['腿']},
+      {row:0,col:2,partIndex:PART_INDEX['肩']},
+      {row:0,col:3,partIndex:PART_INDEX['腰']},
+      {row:1,col:0,partIndex:PART_INDEX['鞋']},
+      {row:1,col:2,partIndex:PART_INDEX['项链']},
+      {row:1,col:1,partIndex:PART_INDEX['手镯']},
+      {row:1,col:3,partIndex:PART_INDEX['戒指']},
+      {row:2,col:0,partIndex:PART_INDEX['辅助装备']},
+      {row:2,col:1,partIndex:PART_INDEX['魔法石']},
+      {row:2,col:2,partIndex:PART_INDEX['耳环']}
+    ]
+  };
+
+  function setRecognitionProgress(message, isError = false){
+    if(!recognitionProgress) return;
+    recognitionProgress.textContent = message;
+    recognitionProgress.classList.toggle('error', !!isError);
+  }
+  function setRecognitionPreview(message, isError = false){
+    if(!recognitionPreview) return;
+    recognitionPreview.textContent = message;
+    recognitionPreview.classList.toggle('error', !!isError);
+  }
+  function cleanupRecognitionPreviewImage(){
+    if(recognitionImageUrl){
+      URL.revokeObjectURL(recognitionImageUrl);
+      recognitionImageUrl = '';
+    }
+  }
+  function resetRecognitionState(keepFile = false){
+    if(!keepFile){
+      recognitionImageFile = null;
+      if(recognitionFileInput) recognitionFileInput.value = '';
+      cleanupRecognitionPreviewImage();
+    }
+    recognitionRows = [];
+    recognitionBusy = false;
+    renderRecognitionRows();
+    setRecognitionProgress('尚未开始识别。');
+    setRecognitionPreview('请先选择图片，然后点击“开始识别”。');
+    if(recognitionStartBtn) recognitionStartBtn.disabled = false;
+    if(recognitionConfirm) recognitionConfirm.disabled = false;
+  }
+  function openRecognitionModal(){
+    resetRecognitionState();
+    recognitionModal?.classList.add('show');
+  }
+  function closeRecognitionModal(){
+    recognitionModal?.classList.remove('show');
+    cleanupRecognitionPreviewImage();
+  }
+  function sanitizeRecognitionDigits(value){
+    return String(value ?? '').replace(/[^0-5]/g, '').slice(0, 11);
+  }
+  function getRecognitionDigitsString(row){
+    return Array.isArray(row?.digits) ? row.digits.map(v => clampInt(v, 0, 5)).join('') : sanitizeRecognitionDigits(row?.digitsText || '');
+  }
+  function digitsToPartsText(digits){
+    const values = String(digits || '').padEnd(11, '0').slice(0, 11).split('');
+    return ['胸','腿','肩','腰','鞋','项链','手镯','戒指','辅助装备','魔法石','耳环'].map((part, index) => `${part}${values[index]}`).join('、');
+  }
+  function renderRecognitionRows(){
+    if(!recognitionGrid) return;
+    if(!recognitionRows.length){
+      recognitionGrid.innerHTML = '';
+      return;
+    }
+    recognitionGrid.innerHTML = recognitionRows.map((row, index) => {
+      const rawName = String(row.ocrTextDisplay || row.ocrText || '').trim();
+      const displayName = rawName || '未识别';
+      return `
+      <div class="recognition-row">
+        <div class="recognition-name-box"><div class="recognition-name-main">${escapeHtml(displayName)}</div></div>
+        <select class="recognition-select" data-recognition-suit="${index}">
+          <option value="">请选择套装</option>
+          ${SUITS.map((name, suitIndex) => `<option value="${suitIndex}" ${row.suitIndex === suitIndex ? 'selected' : ''}>${name}</option>`).join('')}
+        </select>
+        <input class="recognition-code-input" type="text" inputmode="numeric" maxlength="11" value="${escapeHtml(getRecognitionDigitsString(row))}" data-recognition-digits="${index}">
+      </div>
+    `}).join('');
+    recognitionGrid.querySelectorAll('[data-recognition-suit]').forEach(select => {
+      select.addEventListener('change', event => {
+        const index = Number(event.target.dataset.recognitionSuit);
+        recognitionRows[index].suitIndex = toSuitIndex(event.target.value);
+      });
+    });
+    recognitionGrid.querySelectorAll('[data-recognition-digits]').forEach(input => {
+      input.addEventListener('input', event => {
+        const index = Number(event.target.dataset.recognitionDigits);
+        const digits = sanitizeRecognitionDigits(event.target.value);
+        recognitionRows[index].digits = digits.padEnd(11, '0').slice(0, 11).split('').map(v => Number(v));
+        event.target.value = getRecognitionDigitsString(recognitionRows[index]);
+      });
+    });
+  }
+  function normalizeRecognitionText(rawText){
+    return String(rawText || '').replace(/[\s ]+/g, '').replace(/[：:·•.。,，、;；!！?？“”"'‘’()（）【】\[\]<>《》|]/g, '');
+  }
+  function extractSuitNameWindow(rawText){
+    const raw = String(rawText || '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if(!raw) return '';
+    const compact = raw.replace(/\s+/g, '');
+    const stopMarkers = ['（当前','(当前','当前套装','当前','11/11','10/11','9/11','8/11','7/11','6/11','5/11'];
+    let end = compact.length;
+    stopMarkers.forEach(marker => {
+      const idx = compact.indexOf(marker);
+      if(idx >= 0 && idx < end) end = idx;
+    });
+    return compact.slice(0, end).replace(/[（(].*$/, '').trim();
+  }
+  function getCommonCharCount(a, b){
+    const counts = new Map();
+    for(const ch of String(b || '')) counts.set(ch, (counts.get(ch) || 0) + 1);
+    let hit = 0;
+    for(const ch of String(a || '')){
+      const left = counts.get(ch) || 0;
+      if(left > 0){
+        counts.set(ch, left - 1);
+        hit++;
+      }
+    }
+    return hit;
+  }
+  function levenshteinDistance(a, b){
+    const s = Array.from(String(a || ''));
+    const t = Array.from(String(b || ''));
+    const dp = Array.from({length:s.length + 1}, (_, i) => new Array(t.length + 1).fill(0));
+    for(let i = 0; i <= s.length; i++) dp[i][0] = i;
+    for(let j = 0; j <= t.length; j++) dp[0][j] = j;
+    for(let i = 1; i <= s.length; i++){
+      for(let j = 1; j <= t.length; j++){
+        const cost = s[i - 1] === t[j - 1] ? 0 : 1;
+        dp[i][j] = Math.min(
+          dp[i - 1][j] + 1,
+          dp[i][j - 1] + 1,
+          dp[i - 1][j - 1] + cost
+        );
+      }
+    }
+    return dp[s.length][t.length];
+  }
+  function estimateSuitNameCandidate(rawText){
+    const nameWindow = extractSuitNameWindow(rawText);
+    const compact = normalizeRecognitionText(nameWindow || rawText);
+    if(!compact) return {suitIndex:null, score:Number.NEGATIVE_INFINITY, compact:'', display:''};
+    for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
+      const name = SUITS[suitIndex];
+      const prefix = name.slice(0, 2);
+      if(compact.includes(name)) return {suitIndex, score:100, compact, display:nameWindow || compact};
+      if(compact.includes(prefix)) return {suitIndex, score:90, compact, display:nameWindow || compact};
+    }
+    let bestIndex = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    SUITS.forEach((name, suitIndex) => {
+      const prefix = name.slice(0, 2);
+      const common = getCommonCharCount(compact, prefix);
+      const windows = [];
+      for(let start = 0; start <= Math.max(0, compact.length - prefix.length); start++) windows.push(compact.slice(start, start + prefix.length));
+      if(!windows.length) windows.push(compact);
+      const distance = Math.min(...windows.map(part => levenshteinDistance(part, prefix)));
+      const score = common * 12 - distance * 5 - Math.abs(compact.length - prefix.length) * 0.5;
+      if(score > bestScore){
+        bestScore = score;
+        bestIndex = suitIndex;
+      }
+    });
+    return {suitIndex: bestScore >= 8 ? bestIndex : null, score:bestScore, compact, display:nameWindow || compact};
+  }
+  function estimateSuitNameFromText(rawText){
+    return estimateSuitNameCandidate(rawText).suitIndex;
+  }
+  function createHeaderPreview(canvas, peakY, scale){
+    return createHeaderCanvas(canvas, peakY, scale).toDataURL('image/png');
+  }
+  function createHeaderCanvas(canvas, peakY, scale){
+    const sx = 10 * scale;
+    const sy = Math.max(0, peakY - 58 * scale);
+    const sw = 280 * scale;
+    const sh = 78 * scale;
+    const temp = document.createElement('canvas');
+    temp.width = Math.max(1, Math.round(sw));
+    temp.height = Math.max(1, Math.round(sh));
+    temp.getContext('2d').drawImage(canvas, sx, sy, sw, sh, 0, 0, temp.width, temp.height);
+    return temp;
+  }
+  function createSuitNameCanvas(canvas, peakY, scale, variant = 0){
+    // peakY 对应的是每套标题下方那条横向进度线的位置。
+    // 套装名实际位于这条线的上方，大约 70~120 个基准像素处，且在“（当前套装抗魔：xxxx）”左边紧挨着。
+    // 这里直接裁切标题左侧窄区域，尽量避免把“辅助装备/魔法石/星星数量/N/11”带进 OCR。
+    const presets = [
+      {sx: 12, syOffset: 132, sw: 210, sh: 58},
+      {sx: 8,  syOffset: 136, sw: 228, sh: 62},
+      {sx: 18, syOffset: 128, sw: 196, sh: 56},
+      {sx: 10, syOffset: 140, sw: 240, sh: 66},
+      {sx: 0,  syOffset: 126, sw: 260, sh: 60}
+    ];
+    const preset = presets[variant] || presets[0];
+    const sx = Math.max(0, Math.round(preset.sx * scale));
+    const sy = Math.max(0, Math.round(peakY - preset.syOffset * scale));
+    const sw = Math.max(1, Math.min(canvas.width - sx, Math.round(preset.sw * scale)));
+    const sh = Math.max(1, Math.min(canvas.height - sy, Math.round(preset.sh * scale)));
+    const temp = document.createElement('canvas');
+    temp.width = sw;
+    temp.height = sh;
+    const ctx = temp.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, temp.width, temp.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, temp.width, temp.height);
+    return temp;
+  }
+  function preprocessSuitNameCanvas(sourceCanvas, mode = 'gray'){
+    const scale = 5;
+    const temp = document.createElement('canvas');
+    temp.width = Math.max(1, sourceCanvas.width * scale);
+    temp.height = Math.max(1, sourceCanvas.height * scale);
+    const ctx = temp.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, temp.width, temp.height);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sourceCanvas, 0, 0, temp.width, temp.height);
+    const imageData = ctx.getImageData(0, 0, temp.width, temp.height);
+    const data = imageData.data;
+    for(let i = 0; i < data.length; i += 4){
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+      const maxRgb = Math.max(r, g, b);
+      const minRgb = Math.min(r, g, b);
+      const isGold = r > 140 && g > 100 && b < 120 && (r - b) > 40;
+      let value = 255;
+      if(mode === 'bw'){
+        const isDark = !isGold && luminance < 190 && (maxRgb - minRgb) < 120;
+        value = isDark ? 0 : 255;
+      }else if(mode === 'strong'){
+        value = isGold ? 255 : (luminance < 210 ? Math.max(0, luminance - 110) : 255);
+      }else{
+        value = isGold ? 255 : (luminance < 220 ? Math.max(0, luminance - 90) : 255);
+      }
+      data[i] = value;
+      data[i + 1] = value;
+      data[i + 2] = value;
+      data[i + 3] = 255;
+    }
+    ctx.putImageData(imageData, 0, 0);
+    return temp;
+  }
+  function getImageDataFromCanvas(canvas){
+    return canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+  }
+  function detectRecognitionPeaks(imageData){
+    const {width, height, data} = imageData;
+    const xStart = Math.max(0, Math.round(RECOGNITION_LINE_X_START * width / RECOGNITION_BASE_WIDTH));
+    const xEnd = Math.min(width - 1, Math.round(RECOGNITION_LINE_X_END * width / RECOGNITION_BASE_WIDTH));
+    const lineScores = new Array(height).fill(0);
+    for(let y = 0; y < height; y++){
+      let sum = 0;
+      let count = 0;
+      for(let x = xStart; x <= xEnd; x += 2){
+        const index = (y * width + x) * 4;
+        const r = data[index];
+        const g = data[index + 1];
+        const b = data[index + 2];
+        sum += r - (g + b) / 2;
+        count++;
+      }
+      lineScores[y] = count ? sum / count : 0;
+    }
+    const smooth = lineScores.map((_, y) => {
+      let sum = 0;
+      let count = 0;
+      for(let k = -3; k <= 3; k++){
+        const yy = y + k;
+        if(yy < 0 || yy >= height) continue;
+        sum += lineScores[yy];
+        count++;
+      }
+      return count ? sum / count : 0;
+    });
+    const maxScore = Math.max(...smooth);
+    const minScore = Math.min(...smooth);
+    const threshold = minScore + (maxScore - minScore) * 0.62;
+    const minDistance = Math.max(220, Math.round(height / 28));
+    const peaks = [];
+    let lastPeak = -minDistance;
+    for(let y = 3; y < height - 3; y++){
+      const value = smooth[y];
+      if(value < threshold) continue;
+      if(value <= smooth[y - 1] || value < smooth[y + 1]) continue;
+      if(y - lastPeak < minDistance){
+        if(peaks.length && value > peaks[peaks.length - 1].score){
+          peaks[peaks.length - 1] = {y, score:value};
+          lastPeak = y;
+        }
+        continue;
+      }
+      peaks.push({y, score:value});
+      lastPeak = y;
+    }
+    return peaks.sort((a, b) => a.y - b.y).slice(0, 15).map(item => item.y);
+  }
+  function isGoldPixel(r, g, b){
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    if(max < 120 || delta < 30) return false;
+    let h = 0;
+    if(delta){
+      if(max === r) h = ((g - b) / delta) % 6;
+      else if(max === g) h = (b - r) / delta + 2;
+      else h = (r - g) / delta + 4;
+      h *= 60;
+      if(h < 0) h += 360;
+    }
+    const s = max === 0 ? 0 : delta / max;
+    const v = max / 255;
+    return h >= 28 && h <= 66 && s >= 0.35 && v >= 0.45;
+  }
+  function countGoldStars(canvas, cellRect){
+    const ctx = canvas.getContext('2d');
+    const sx = Math.max(0, Math.round(cellRect.x));
+    const sy = Math.max(0, Math.round(cellRect.y));
+    const sw = Math.max(1, Math.round(cellRect.w));
+    const sh = Math.max(1, Math.round(cellRect.h));
+    if(sx >= canvas.width || sy >= canvas.height) return 0;
+    const imageData = ctx.getImageData(sx, sy, Math.min(sw, canvas.width - sx), Math.min(sh, canvas.height - sy));
+    const {width, height, data} = imageData;
+    const yStart = Math.max(0, Math.floor(height * 0.60));
+    const yEnd = Math.min(height, Math.ceil(height * 0.95));
+    const mask = new Uint8Array(width * height);
+    for(let y = yStart; y < yEnd; y++){
+      for(let x = 0; x < width; x++){
+        const index = (y * width + x) * 4;
+        if(isGoldPixel(data[index], data[index + 1], data[index + 2])){
+          mask[y * width + x] = 1;
+        }
+      }
+    }
+    const visited = new Uint8Array(width * height);
+    let count = 0;
+    const queueX = new Int32Array(width * height);
+    const queueY = new Int32Array(width * height);
+    for(let y = yStart; y < yEnd; y++){
+      for(let x = 0; x < width; x++){
+        const start = y * width + x;
+        if(!mask[start] || visited[start]) continue;
+        let head = 0;
+        let tail = 0;
+        queueX[tail] = x;
+        queueY[tail] = y;
+        tail++;
+        visited[start] = 1;
+        let area = 0;
+        while(head < tail){
+          const cx = queueX[head];
+          const cy = queueY[head];
+          head++;
+          area++;
+          if(cx + 1 < width){
+            const next = cy * width + cx + 1;
+            if(mask[next] && !visited[next]){
+              visited[next] = 1;
+              queueX[tail] = cx + 1;
+              queueY[tail] = cy;
+              tail++;
+            }
+          }
+          if(cx - 1 >= 0){
+            const next = cy * width + cx - 1;
+            if(mask[next] && !visited[next]){
+              visited[next] = 1;
+              queueX[tail] = cx - 1;
+              queueY[tail] = cy;
+              tail++;
+            }
+          }
+          if(cy + 1 < yEnd){
+            const next = (cy + 1) * width + cx;
+            if(mask[next] && !visited[next]){
+              visited[next] = 1;
+              queueX[tail] = cx;
+              queueY[tail] = cy + 1;
+              tail++;
+            }
+          }
+          if(cy - 1 >= yStart){
+            const next = (cy - 1) * width + cx;
+            if(mask[next] && !visited[next]){
+              visited[next] = 1;
+              queueX[tail] = cx;
+              queueY[tail] = cy - 1;
+              tail++;
+            }
+          }
+        }
+        if(area >= 12) count++;
+      }
+    }
+    return Math.min(5, count);
+  }
+  function buildRecognitionDigits(canvas, peakY){
+    const scale = canvas.width / RECOGNITION_BASE_WIDTH;
+    const digits = new Array(11).fill(0);
+    RECOGNITION_CELL_LAYOUT.entries.forEach(entry => {
+      const cellRect = {
+        x: RECOGNITION_CELL_LAYOUT.xLefts[entry.col] * scale,
+        y: peakY + RECOGNITION_CELL_LAYOUT.yOffsets[entry.row] * scale,
+        w: RECOGNITION_CELL_LAYOUT.width * scale,
+        h: RECOGNITION_CELL_LAYOUT.height * scale
+      };
+      digits[entry.partIndex] = countGoldStars(canvas, cellRect);
+    });
+    return digits;
+  }
+  async function loadImageToCanvas(file){
+    const url = URL.createObjectURL(file);
+    cleanupRecognitionPreviewImage();
+    recognitionImageUrl = url;
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = url;
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('图片加载失败。'));
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    return canvas;
+  }
+  async function tryRecognizeSuitNames(canvas, peaks){
+    if(!window.Tesseract || !Array.isArray(peaks) || !peaks.length) return [];
+    const result = [];
+    const scale = canvas.width / RECOGNITION_BASE_WIDTH;
+    const modes = ['bw', 'strong', 'gray'];
+    const psms = [7, 13];
+    for(let index = 0; index < peaks.length; index++){
+      setRecognitionProgress(`星级识别完成，正在尝试匹配套装名称（${index + 1}/${peaks.length}）...`);
+      let bestDisplay = '';
+      let bestSuitIndex = null;
+      let bestScore = Number.NEGATIVE_INFINITY;
+      for(let variant = 0; variant < 5; variant++){
+        const nameCanvas = createSuitNameCanvas(canvas, peaks[index], scale, variant);
+        for(const mode of modes){
+          const preparedCanvas = preprocessSuitNameCanvas(nameCanvas, mode);
+          for(const psm of psms){
+            try {
+              const ocr = await window.Tesseract.recognize(preparedCanvas, 'chi_sim', {
+                tessedit_pageseg_mode: psm,
+                preserve_interword_spaces: '0',
+                user_defined_dpi: '500',
+                tessedit_char_blacklist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz（）()：:当前套装抗魔*×xX+-_./[]{}|<>'
+              });
+              const rawText = String(ocr?.data?.text || '');
+              const candidate = estimateSuitNameCandidate(rawText);
+              if(candidate.score > bestScore){
+                bestScore = candidate.score;
+                bestDisplay = candidate.display || extractSuitNameWindow(rawText) || normalizeRecognitionText(rawText) || '';
+                bestSuitIndex = candidate.suitIndex;
+              }
+            } catch {}
+          }
+        }
+      }
+      result.push({text:bestDisplay, suitIndex:bestSuitIndex});
+    }
+    return result;
+  }
+  async function startRecognition(){
+    if(recognitionBusy) return;
+    if(!recognitionImageFile){
+      setRecognitionPreview('请先选择图片文件。', true);
+      showToast('请先选择图片文件。', 'error');
+      return;
+    }
+    recognitionBusy = true;
+    if(recognitionStartBtn) recognitionStartBtn.disabled = true;
+    if(recognitionConfirm) recognitionConfirm.disabled = true;
+    setRecognitionProgress('正在读取图片...');
+    setRecognitionPreview('识别中，请稍候。');
+    try {
+      const canvas = await loadImageToCanvas(recognitionImageFile);
+      const peaks = detectRecognitionPeaks(getImageDataFromCanvas(canvas));
+      if(peaks.length < 10){
+        throw new Error('没有识别到足够多的套装分隔线。请确认上传的是完整长图。');
+      }
+      setRecognitionProgress(`已识别到 ${peaks.length} 套，正在统计星级...`);
+      recognitionRows = peaks.map((peakY, index) => ({
+        order:index,
+        suitIndex:null,
+        digits: buildRecognitionDigits(canvas, peakY),
+        ocrText:'',
+        ocrTextDisplay:''
+      }));
+      renderRecognitionRows();
+      setRecognitionPreview(`星级识别完成，共 ${recognitionRows.length} 套。左侧显示的是当前裁切到的标题原文；若下拉框已自动选中正确套装，直接确认导入即可。`);
+      let ocrResults = [];
+      try {
+        ocrResults = await tryRecognizeSuitNames(canvas, peaks);
+      } catch {}
+      if(ocrResults.length){
+        recognitionRows.forEach((row, index) => {
+          row.ocrText = ocrResults[index]?.text || '';
+          row.ocrTextDisplay = ocrResults[index]?.text || '';
+          row.suitIndex = ocrResults[index]?.suitIndex ?? row.suitIndex;
+        });
+        renderRecognitionRows();
+      }
+      setRecognitionProgress('识别完成。已自动填入能匹配到的套装名称。');
+      showToast('图片识别完成，请检查后再确认导入。', 'ok');
+    } catch (error){
+      const message = error?.message || '图片识别失败。';
+      recognitionRows = [];
+      renderRecognitionRows();
+      setRecognitionProgress(message, true);
+      setRecognitionPreview(message, true);
+      showToast(message, 'error');
+    } finally {
+      recognitionBusy = false;
+      if(recognitionStartBtn) recognitionStartBtn.disabled = false;
+      if(recognitionConfirm) recognitionConfirm.disabled = false;
+    }
+  }
+  function confirmRecognitionImport(){
+    if(!recognitionRows.length){
+      setRecognitionPreview('当前还没有可导入的识别结果。', true);
+      showToast('当前还没有可导入的识别结果。', 'error');
+      return;
+    }
+    const matrix = defaultMatrix();
+    const used = new Set();
+    for(let index = 0; index < recognitionRows.length; index++){
+      const row = recognitionRows[index];
+      if(row.suitIndex === null){
+        setRecognitionPreview(`第 ${index + 1} 套还没有选择套装名称。`, true);
+        showToast(`第 ${index + 1} 套还没有选择套装名称。`, 'error');
+        return;
+      }
+      if(used.has(row.suitIndex)){
+        setRecognitionPreview(`套装“${SUITS[row.suitIndex]}”被重复选择了。`, true);
+        showToast(`套装“${SUITS[row.suitIndex]}”被重复选择了。`, 'error');
+        return;
+      }
+      const digits = getRecognitionDigitsString(row);
+      if(!/^[0-5]{11}$/.test(digits)){
+        setRecognitionPreview(`第 ${index + 1} 套的 11 位数字不合法。`, true);
+        showToast(`第 ${index + 1} 套的 11 位数字不合法。`, 'error');
+        return;
+      }
+      matrix[row.suitIndex] = digits.split('').map(v => Number(v));
+      used.add(row.suitIndex);
+    }
+    const missing = SUITS.filter((_, suitIndex) => !used.has(suitIndex));
+    if(missing.length){
+      setRecognitionPreview(`还有未选择的套装：${missing.join('、')}`, true);
+      showToast(`还有未选择的套装：${missing.join('、')}`, 'error');
+      return;
+    }
+    state.stars = matrix;
+    state.inventory = defaultInventory();
+    saveState();
+    closeRecognitionModal();
+    markDirty('图片识别结果已导入到主表，请点击页面底部“计算”。');
+    showToast('图片识别结果已导入。', 'ok');
   }
 
   function switchTab(tab){
@@ -1803,6 +2451,7 @@
     inputTabBtn.addEventListener('click', () => switchTab('input'));
     resultsTabBtn.addEventListener('click', () => switchTab('results'));
     randomBtn.addEventListener('click', fillRandom);
+    imageImportBtn?.addEventListener('click', openRecognitionModal);
     importBtn.addEventListener('click', openImportModal);
     cacheBtn.addEventListener('click', openCacheModal);
     exportBtn.addEventListener('click', openExportModal);
@@ -1850,6 +2499,22 @@
         }
       }
     });
+    recognitionFileInput?.addEventListener('change', event => {
+      const file = event.target.files?.[0] || null;
+      recognitionImageFile = file;
+      recognitionRows = [];
+      renderRecognitionRows();
+      if(file){
+        setRecognitionPreview(`已选择图片：${file.name}`);
+        setRecognitionProgress('图片已选择，点击“开始识别”。');
+      }else{
+        setRecognitionPreview('请先选择图片，然后点击“开始识别”。');
+        setRecognitionProgress('尚未开始识别。');
+      }
+    });
+    recognitionStartBtn?.addEventListener('click', startRecognition);
+    recognitionCancel?.addEventListener('click', closeRecognitionModal);
+    recognitionConfirm?.addEventListener('click', confirmRecognitionImport);
     modalCancel.addEventListener('click', closeInventoryModal);
     modalConfirm.addEventListener('click', confirmInventory);
     copyTemplateBtn.addEventListener('click', copyImportTemplate);
@@ -1860,6 +2525,7 @@
     cacheCloseBtn.addEventListener('click', closeCacheModal);
     detailCloseBtn.addEventListener('click', closeDetailModal);
     inventoryModal.addEventListener('click', event => { if(event.target === inventoryModal) closeInventoryModal(); });
+    recognitionModal?.addEventListener('click', event => { if(event.target === recognitionModal) closeRecognitionModal(); });
     importModal.addEventListener('click', event => { if(event.target === importModal) event.stopPropagation(); });
     exportModal.addEventListener('click', event => { if(event.target === exportModal) closeExportModal(); });
     cacheModal.addEventListener('click', event => { if(event.target === cacheModal) closeCacheModal(); });
@@ -1879,6 +2545,7 @@
     document.addEventListener('keydown', event => {
       if(event.key !== 'Escape') return;
       if(detailModal.classList.contains('show')) closeDetailModal();
+      if(recognitionModal?.classList.contains('show')) closeRecognitionModal();
       if(exportModal.classList.contains('show')) closeExportModal();
       if(cacheModal.classList.contains('show')) closeCacheModal();
       if(inventoryModal.classList.contains('show')) closeInventoryModal();
