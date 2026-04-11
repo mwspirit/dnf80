@@ -413,7 +413,7 @@
         </div>
         <div class="recognition-help">
           <div><b>识别规则</b></div>
-          <div>识别出的 11 位数字顺序为：胸、腿、肩、腰、鞋、<span class="recognition-highlight">项链、手镯</span>、戒指、辅助装备、魔法石、耳环。</div>
+          <div>识别出的 11 位数字顺序为：胸、腿、肩、腰、鞋、<span class="recognition-highlight">手镯、项链</span>、戒指、辅助装备、魔法石、耳环。</div>
         </div>
       </div>
       <div class="recognition-warning">这是实验版功能。星级识别针对固定截图样式做了专项适配；若你上传的是其他界面、缩略图或裁切过的图片，结果可能不准。</div>
@@ -714,12 +714,25 @@
   function sanitizeRecognitionDigits(value){
     return String(value ?? '').replace(/[^0-5]/g, '').slice(0, 11);
   }
+  const RECOGNITION_DISPLAY_ORDER = [0,1,2,3,4,6,5,7,8,9,10];
+  function standardDigitsToDisplayDigits(digits){
+    const source = Array.isArray(digits) ? digits.map(v => clampInt(v, 0, 5)) : sanitizeRecognitionDigits(digits).padEnd(11, '0').slice(0, 11).split('').map(v => Number(v));
+    return RECOGNITION_DISPLAY_ORDER.map(index => source[index] ?? 0);
+  }
+  function displayDigitsToStandardDigits(digits){
+    const source = Array.isArray(digits) ? digits.map(v => clampInt(v, 0, 5)) : sanitizeRecognitionDigits(digits).padEnd(11, '0').slice(0, 11).split('').map(v => Number(v));
+    const standard = new Array(11).fill(0);
+    RECOGNITION_DISPLAY_ORDER.forEach((standardIndex, displayIndex) => {
+      standard[standardIndex] = source[displayIndex] ?? 0;
+    });
+    return standard;
+  }
   function getRecognitionDigitsString(row){
-    return Array.isArray(row?.digits) ? row.digits.map(v => clampInt(v, 0, 5)).join('') : sanitizeRecognitionDigits(row?.digitsText || '');
+    return standardDigitsToDisplayDigits(Array.isArray(row?.digits) ? row.digits : (row?.digitsText || '')).join('');
   }
   function digitsToPartsText(digits){
-    const values = String(digits || '').padEnd(11, '0').slice(0, 11).split('');
-    return ['胸','腿','肩','腰','鞋','项链','手镯','戒指','辅助装备','魔法石','耳环'].map((part, index) => `${part}${values[index]}`).join('、');
+    const values = standardDigitsToDisplayDigits(digits);
+    return ['胸','腿','肩','腰','鞋','手镯','项链','戒指','辅助装备','魔法石','耳环'].map((part, index) => `${part}${values[index]}`).join('、');
   }
   function renderRecognitionRows(){
     if(!recognitionGrid) return;
@@ -750,7 +763,7 @@
       input.addEventListener('input', event => {
         const index = Number(event.target.dataset.recognitionDigits);
         const digits = sanitizeRecognitionDigits(event.target.value);
-        recognitionRows[index].digits = digits.padEnd(11, '0').slice(0, 11).split('').map(v => Number(v));
+        recognitionRows[index].digits = displayDigitsToStandardDigits(digits);
         event.target.value = getRecognitionDigitsString(recognitionRows[index]);
       });
     });
@@ -1205,13 +1218,13 @@
         showToast(`套装“${SUITS[row.suitIndex]}”被重复选择了。`, 'error');
         return;
       }
-      const digits = getRecognitionDigitsString(row);
-      if(!/^[0-5]{11}$/.test(digits)){
+      const displayDigits = getRecognitionDigitsString(row);
+      if(!/^[0-5]{11}$/.test(displayDigits)){
         setRecognitionPreview(`第 ${index + 1} 套的 11 位数字不合法。`, true);
         showToast(`第 ${index + 1} 套的 11 位数字不合法。`, 'error');
         return;
       }
-      matrix[row.suitIndex] = digits.split('').map(v => Number(v));
+      matrix[row.suitIndex] = displayDigitsToStandardDigits(displayDigits);
       used.add(row.suitIndex);
     }
     const missing = SUITS.filter((_, suitIndex) => !used.has(suitIndex));
