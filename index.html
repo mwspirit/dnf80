@@ -481,7 +481,7 @@
   const SUIT_NAME_CLASS = Object.fromEntries(SUITS.map((name, index) => [index, ({'万灵':'suit-green','星辰':'suit-green','天劫':'suit-green','暗夜':'suit-red','逝魔':'suit-red'})[name] || '']));
   const PARTS = ['胸','腿','肩','腰','鞋','项链','手镯','戒指','辅助装备','魔法石','耳环'];
   const PART_INDEX = Object.fromEntries(PARTS.map((p, i) => [p, i]));
-  const CURRENT_WEAR_ORDER = ['肩','胸','腿','腰','鞋','手镯','项链','戒指','辅助装备','魔法石','耳环'].map(part => PART_INDEX[part]);
+  const CURRENT_WEAR_ORDER = ['胸','腿','肩','腰','鞋','手镯','项链','戒指','辅助装备','魔法石','耳环'].map(part => PART_INDEX[part]);
   const SPECIAL_PARTS = new Set(['胸', '手镯', '耳环']);
   const STAR_VALUES = {
     special: {1:6665,2:7417,3:8170,4:8922,5:9675},
@@ -579,6 +579,8 @@
   let recognitionImageUrl = '';
   let recognitionRows = [];
   let recognitionBusy = false;
+  let recognitionNameWorkerPromise = null;
+  let recognitionNameWorkerPsm = null;
   let state = loadState();
   let cacheSlotState = loadCacheSlots();
   let cacheSlotNames = loadCacheSlotNames();
@@ -816,35 +818,256 @@
     }
     return dp[s.length][t.length];
   }
-  function estimateSuitNameCandidate(rawText){
+  function getShiMoHeuristicScore(compact, rawScores){
+    if(!compact) return Number.NEGATIVE_INFINITY;
+    const bestOtherStrong = rawScores
+      .filter(entry => entry.suitIndex !== 12)
+      .reduce((max, entry) => Math.max(max, Number.isFinite(entry.score) ? entry.score : Number.NEGATIVE_INFINITY), Number.NEGATIVE_INFINITY);
+    const aliasTokens = ['逝麻','逝磨','逝糜','逝订','六订','削冶','削壮','削码','上妆'];
+    if(aliasTokens.some(token => compact.includes(token))) return 95;
+    if(compact.includes('逝')) return 95;
+    if((compact.includes('之力') || compact.includes('力')) && bestOtherStrong < 90) return 26;
+    return Number.NEGATIVE_INFINITY;
+  }
+  function buildSuitNameScoreEntries(rawText){
     const nameWindow = extractSuitNameWindow(rawText);
     const compact = normalizeRecognitionText(nameWindow || rawText);
-    if(!compact) return {suitIndex:null, score:Number.NEGATIVE_INFINITY, compact:'', display:''};
-    for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
-      const name = SUITS[suitIndex];
-      const prefix = name.slice(0, 2);
-      if(compact.includes(name)) return {suitIndex, score:100, compact, display:nameWindow || compact};
-      if(compact.includes(prefix)) return {suitIndex, score:90, compact, display:nameWindow || compact};
+    const display = nameWindow || compact;
+    if(!compact){
+      return {
+        compact:'',
+        display:'',
+        scoreEntries: SUITS.map((_, suitIndex) => ({suitIndex, score:Number.NEGATIVE_INFINITY})),
+        bestIndex:null,
+        bestScore:Number.NEGATIVE_INFINITY,
+        secondScore:Number.NEGATIVE_INFINITY
+      };
     }
-    let bestIndex = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-    SUITS.forEach((name, suitIndex) => {
+    const rawScores = SUITS.map((name, suitIndex) => {
       const prefix = name.slice(0, 2);
-      const common = getCommonCharCount(compact, prefix);
+      if(compact.includes(name)) return {suitIndex, score:100};
+      if(compact.includes(prefix)) return {suitIndex, score:90};
       const windows = [];
       for(let start = 0; start <= Math.max(0, compact.length - prefix.length); start++) windows.push(compact.slice(start, start + prefix.length));
       if(!windows.length) windows.push(compact);
+      const common = getCommonCharCount(compact, prefix);
       const distance = Math.min(...windows.map(part => levenshteinDistance(part, prefix)));
-      const score = common * 12 - distance * 5 - Math.abs(compact.length - prefix.length) * 0.5;
-      if(score > bestScore){
-        bestScore = score;
-        bestIndex = suitIndex;
-      }
+      return {suitIndex, score: common * 12 - distance * 5 - Math.abs(compact.length - prefix.length) * 0.5};
     });
-    return {suitIndex: bestScore >= 8 ? bestIndex : null, score:bestScore, compact, display:nameWindow || compact};
+    const shiMoHeuristicScore = getShiMoHeuristicScore(compact, rawScores);
+    if(Number.isFinite(shiMoHeuristicScore)){
+      rawScores[12].score = Math.max(rawScores[12].score, shiMoHeuristicScore);
+    }
+    const scoreEntries = rawScores.sort((a, b) => b.score - a.score);
+    return {
+      compact,
+      display,
+      scoreEntries,
+      bestIndex: scoreEntries[0]?.suitIndex ?? null,
+      bestScore: scoreEntries[0]?.score ?? Number.NEGATIVE_INFINITY,
+      secondScore: scoreEntries[1]?.score ?? Number.NEGATIVE_INFINITY
+    };
+  }
+  function estimateSuitNameCandidate(rawText){
+    const result = buildSuitNameScoreEntries(rawText);
+    return {
+      suitIndex: result.bestScore >= 8 ? result.bestIndex : null,
+      score: result.bestScore,
+      secondScore: result.secondScore,
+      compact: result.compact,
+      display: result.display,
+      scoreEntries: result.scoreEntries
+    };
   }
   function estimateSuitNameFromText(rawText){
     return estimateSuitNameCandidate(rawText).suitIndex;
+  }
+  function createRecognitionNameRowState(index){
+    return {
+      index,
+      scoreBySuit: Array(SUITS.length).fill(Number.NEGATIVE_INFINITY),
+      bestDisplay:'',
+      bestCompact:'',
+      bestSuitIndex:null,
+      bestWeightedScore:Number.NEGATIVE_INFINITY,
+      exactOrPrefixMatched:false,
+      assignedSuitIndex:null,
+      assignedScore:Number.NEGATIVE_INFINITY,
+      assignedMargin:Number.NEGATIVE_INFINITY
+    };
+  }
+  function getRecognitionConfidenceBonus(confidence){
+    return Math.max(0, Math.min(100, Number(confidence) || 0)) * 0.04;
+  }
+  function updateRecognitionNameRowState(rowState, candidate, confidence){
+    if(!rowState || !candidate) return;
+    const confidenceBonus = getRecognitionConfidenceBonus(confidence);
+    candidate.scoreEntries?.forEach(entry => {
+      if(!Number.isFinite(entry.score) || entry.score < 8) return;
+      const weighted = entry.score + confidenceBonus;
+      if(weighted > rowState.scoreBySuit[entry.suitIndex]) rowState.scoreBySuit[entry.suitIndex] = weighted;
+    });
+    const weightedBest = candidate.score + confidenceBonus;
+    if(weightedBest > rowState.bestWeightedScore){
+      rowState.bestWeightedScore = weightedBest;
+      rowState.bestSuitIndex = candidate.suitIndex;
+      rowState.bestDisplay = candidate.display || rowState.bestDisplay;
+      rowState.bestCompact = candidate.compact || rowState.bestCompact;
+    }
+    if(candidate.score >= 90) rowState.exactOrPrefixMatched = true;
+  }
+  function getRecognitionSortedScores(rowState){
+    return rowState.scoreBySuit
+      .map((score, suitIndex) => ({suitIndex, score}))
+      .filter(entry => Number.isFinite(entry.score) && entry.score >= 8)
+      .sort((a, b) => b.score - a.score);
+  }
+  function getRecognitionAssignmentMeta(rowState, assignedSuitIndex = rowState?.assignedSuitIndex ?? null){
+    if(!rowState || assignedSuitIndex === null || assignedSuitIndex === undefined) return {score:Number.NEGATIVE_INFINITY, margin:Number.NEGATIVE_INFINITY, strong:false};
+    const assignedScore = rowState.scoreBySuit?.[assignedSuitIndex];
+    if(!Number.isFinite(assignedScore)) return {score:Number.NEGATIVE_INFINITY, margin:Number.NEGATIVE_INFINITY, strong:false};
+    const nextBest = rowState.scoreBySuit
+      .map((score, suitIndex) => ({score, suitIndex}))
+      .filter(entry => entry.suitIndex !== assignedSuitIndex && Number.isFinite(entry.score))
+      .reduce((max, entry) => Math.max(max, entry.score), Number.NEGATIVE_INFINITY);
+    const margin = assignedScore - (Number.isFinite(nextBest) ? nextBest : 0);
+    const strong = assignedScore >= 90 || (assignedScore >= 24 && margin >= 8) || (assignedScore >= 20 && margin >= 10);
+    return {score:assignedScore, margin, strong};
+  }
+  function shouldAutoSelectRecognitionAssignment(rowState){
+    const meta = getRecognitionAssignmentMeta(rowState);
+    if(rowState?.assignedSuitIndex === null || rowState?.assignedSuitIndex === undefined) return false;
+    return meta.score >= 90 || (meta.score >= 20 && meta.margin >= 6) || (meta.score >= 16 && meta.margin >= 10);
+  }
+  function getRecognitionFallbackRowIndexes(rowStates){
+    return rowStates
+      .map((rowState, index) => ({index, meta:getRecognitionAssignmentMeta(rowState)}))
+      .filter(item => rowStates[item.index]?.assignedSuitIndex === null || !item.meta.strong)
+      .map(item => item.index);
+  }
+  function assignRecognitionSuitNames(rowStates){
+    const rowCount = rowStates.length;
+    const memo = new Map();
+    function solve(rowIndex, usedMask){
+      if(rowIndex >= rowCount) return {score:0, pick:null};
+      const key = `${rowIndex}|${usedMask}`;
+      if(memo.has(key)) return memo.get(key);
+      let best = {score: solve(rowIndex + 1, usedMask).score, pick:null};
+      for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
+        if((usedMask & (1 << suitIndex)) !== 0) continue;
+        const rowScore = rowStates[rowIndex]?.scoreBySuit?.[suitIndex];
+        if(!Number.isFinite(rowScore) || rowScore < 8) continue;
+        const next = solve(rowIndex + 1, usedMask | (1 << suitIndex));
+        const total = rowScore + next.score;
+        if(total > best.score) best = {score:total, pick:suitIndex};
+      }
+      memo.set(key, best);
+      return best;
+    }
+    let usedMask = 0;
+    for(let rowIndex = 0; rowIndex < rowCount; rowIndex++){
+      const best = solve(rowIndex, usedMask);
+      rowStates[rowIndex].assignedSuitIndex = best.pick === null ? null : best.pick;
+      const meta = getRecognitionAssignmentMeta(rowStates[rowIndex], rowStates[rowIndex].assignedSuitIndex);
+      rowStates[rowIndex].assignedScore = meta.score;
+      rowStates[rowIndex].assignedMargin = meta.margin;
+      if(best.pick !== null) usedMask |= (1 << best.pick);
+    }
+    return rowStates;
+  }
+  function getRecognitionFastAttempts(){
+    return [
+      {variant:0, mode:'gray', psm:7},
+      {variant:0, mode:'bw', psm:7},
+      {variant:1, mode:'gray', psm:7},
+      {variant:1, mode:'bw', psm:7},
+      {variant:0, mode:'strong', psm:7},
+      {variant:2, mode:'gray', psm:7}
+    ];
+  }
+  function getRecognitionFallbackAttempts(){
+    return [
+      {variant:0, mode:'gray', psm:13},
+      {variant:0, mode:'bw', psm:13},
+      {variant:2, mode:'bw', psm:7},
+      {variant:2, mode:'strong', psm:7},
+      {variant:3, mode:'gray', psm:7},
+      {variant:3, mode:'bw', psm:7},
+      {variant:4, mode:'gray', psm:7},
+      {variant:4, mode:'bw', psm:7},
+      {variant:1, mode:'strong', psm:7},
+      {variant:2, mode:'gray', psm:13},
+      {variant:3, mode:'strong', psm:7},
+      {variant:4, mode:'strong', psm:7}
+    ];
+  }
+  async function getRecognitionNameWorker(){
+    if(!window.Tesseract?.createWorker) return null;
+    if(!recognitionNameWorkerPromise){
+      recognitionNameWorkerPromise = (async () => {
+        const worker = await window.Tesseract.createWorker('chi_sim');
+        await worker.setParameters({
+          preserve_interword_spaces: '0',
+          user_defined_dpi: '500',
+          tessedit_char_blacklist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz（）()：:当前套装抗魔*×xX+-_./[]{}|<>'
+        });
+        recognitionNameWorkerPsm = null;
+        return worker;
+      })().catch(error => {
+        recognitionNameWorkerPromise = null;
+        recognitionNameWorkerPsm = null;
+        throw error;
+      });
+    }
+    return recognitionNameWorkerPromise;
+  }
+  async function runRecognitionNameOcr(worker, image, psm){
+    if(!worker) return {text:'', confidence:0};
+    if(recognitionNameWorkerPsm !== psm){
+      await worker.setParameters({tessedit_pageseg_mode: String(psm)});
+      recognitionNameWorkerPsm = psm;
+    }
+    const result = await worker.recognize(image);
+    return {
+      text: String(result?.data?.text || ''),
+      confidence: Number(result?.data?.confidence || 0)
+    };
+  }
+  function getPreparedRecognitionNameCanvas(cache, canvas, peakY, scale, variant, mode){
+    const cacheKey = `${variant}|${mode}`;
+    if(cache[cacheKey]) return cache[cacheKey];
+    const baseCanvas = createSuitNameCanvas(canvas, peakY, scale, variant);
+    const prepared = mode === 'raw' ? baseCanvas : preprocessSuitNameCanvas(baseCanvas, mode);
+    cache[cacheKey] = prepared;
+    return prepared;
+  }
+  async function runRecognitionNameAttemptBatch(worker, canvas, peaks, rowStates, rowIndexes, attempts, stageLabel, currentStepRef, totalSteps){
+    const scale = canvas.width / RECOGNITION_BASE_WIDTH;
+    const canvasCaches = peaks.map(() => ({}));
+    for(const rowIndex of rowIndexes){
+      for(const attempt of attempts){
+        currentStepRef.value += 1;
+        setRecognitionProgress(`星级识别完成，正在${stageLabel}套装名称（${currentStepRef.value}/${totalSteps}）...`);
+        const preparedCanvas = getPreparedRecognitionNameCanvas(canvasCaches[rowIndex], canvas, peaks[rowIndex], scale, attempt.variant, attempt.mode);
+        try {
+          const ocr = await runRecognitionNameOcr(worker, preparedCanvas, attempt.psm);
+          const candidate = estimateSuitNameCandidate(ocr.text);
+          updateRecognitionNameRowState(rowStates[rowIndex], candidate, ocr.confidence);
+          if(candidate.score >= 90) break;
+        } catch {}
+      }
+    }
+  }
+  function applyRecognitionAssignmentsToRows(rowStates, rows){
+    let autoSelectedCount = 0;
+    rowStates.forEach((rowState, index) => {
+      const assignedSuitIndex = shouldAutoSelectRecognitionAssignment(rowState) ? rowState.assignedSuitIndex : null;
+      rows[index].ocrText = rowState.bestDisplay || rowState.bestCompact || '';
+      rows[index].ocrTextDisplay = rowState.bestDisplay || rowState.bestCompact || '';
+      rows[index].suitIndex = assignedSuitIndex;
+      if(assignedSuitIndex !== null) autoSelectedCount++;
+    });
+    return autoSelectedCount;
   }
   function createHeaderPreview(canvas, peakY, scale){
     return createHeaderCanvas(canvas, peakY, scale).toDataURL('image/png');
@@ -1139,41 +1362,25 @@
   }
   async function tryRecognizeSuitNames(canvas, peaks){
     if(!window.Tesseract || !Array.isArray(peaks) || !peaks.length) return [];
-    const result = [];
-    const scale = canvas.width / RECOGNITION_BASE_WIDTH;
-    const modes = ['bw', 'strong', 'gray'];
-    const psms = [7, 13];
-    for(let index = 0; index < peaks.length; index++){
-      setRecognitionProgress(`星级识别完成，正在尝试匹配套装名称（${index + 1}/${peaks.length}）...`);
-      let bestDisplay = '';
-      let bestSuitIndex = null;
-      let bestScore = Number.NEGATIVE_INFINITY;
-      for(let variant = 0; variant < 5; variant++){
-        const nameCanvas = createSuitNameCanvas(canvas, peaks[index], scale, variant);
-        for(const mode of modes){
-          const preparedCanvas = preprocessSuitNameCanvas(nameCanvas, mode);
-          for(const psm of psms){
-            try {
-              const ocr = await window.Tesseract.recognize(preparedCanvas, 'chi_sim', {
-                tessedit_pageseg_mode: psm,
-                preserve_interword_spaces: '0',
-                user_defined_dpi: '500',
-                tessedit_char_blacklist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz（）()：:当前套装抗魔*×xX+-_./[]{}|<>'
-              });
-              const rawText = String(ocr?.data?.text || '');
-              const candidate = estimateSuitNameCandidate(rawText);
-              if(candidate.score > bestScore){
-                bestScore = candidate.score;
-                bestDisplay = candidate.display || extractSuitNameWindow(rawText) || normalizeRecognitionText(rawText) || '';
-                bestSuitIndex = candidate.suitIndex;
-              }
-            } catch {}
-          }
-        }
-      }
-      result.push({text:bestDisplay, suitIndex:bestSuitIndex});
+    const worker = await getRecognitionNameWorker();
+    const rowStates = peaks.map((_, index) => createRecognitionNameRowState(index));
+    const fastAttempts = getRecognitionFastAttempts();
+    const fallbackAttempts = getRecognitionFallbackAttempts();
+    const totalFastSteps = peaks.length * fastAttempts.length;
+    const progressRef = {value:0};
+    await runRecognitionNameAttemptBatch(worker, canvas, peaks, rowStates, peaks.map((_, index) => index), fastAttempts, '快速匹配', progressRef, totalFastSteps + peaks.length * fallbackAttempts.length);
+    assignRecognitionSuitNames(rowStates);
+    const fallbackRows = getRecognitionFallbackRowIndexes(rowStates);
+    if(fallbackRows.length){
+      await runRecognitionNameAttemptBatch(worker, canvas, peaks, rowStates, fallbackRows, fallbackAttempts, '精细匹配', progressRef, totalFastSteps + fallbackRows.length * fallbackAttempts.length);
+      assignRecognitionSuitNames(rowStates);
     }
-    return result;
+    return rowStates.map(rowState => ({
+      text: rowState.bestDisplay || rowState.bestCompact || '',
+      suitIndex: shouldAutoSelectRecognitionAssignment(rowState) ? rowState.assignedSuitIndex : null,
+      assignedScore: rowState.assignedScore,
+      assignedMargin: rowState.assignedMargin
+    }));
   }
   async function startRecognition(){
     if(recognitionBusy) return;
@@ -1211,15 +1418,18 @@
       try {
         ocrResults = await tryRecognizeSuitNames(canvas, peaks);
       } catch {}
+      let autoSelectedCount = 0;
       if(ocrResults.length){
         recognitionRows.forEach((row, index) => {
           row.ocrText = ocrResults[index]?.text || '';
           row.ocrTextDisplay = ocrResults[index]?.text || '';
-          row.suitIndex = ocrResults[index]?.suitIndex ?? row.suitIndex;
+          row.suitIndex = ocrResults[index]?.suitIndex ?? null;
+          if(row.suitIndex !== null) autoSelectedCount++;
         });
         renderRecognitionRows();
       }
-      setRecognitionProgress('识别完成。已自动填入能匹配到的套装名称。');
+      setRecognitionProgress('识别完成。已尽量自动匹配套装名称。');
+      setRecognitionPreview(`星级识别完成，共 ${recognitionRows.length} 套；套装名称已自动选中 ${autoSelectedCount} 套。若有未选中的行，请手动修正后再导入。`);
       showToast('图片识别完成，请检查后再确认导入。', 'ok');
     } catch (error){
       const message = error?.message || '图片识别失败。';
@@ -2204,15 +2414,8 @@
   }
   function renderCacheSlots(){
     cacheSlots.innerHTML = cacheSlotState.map((entry, index) => {
-      const filled = entry ? countFilledCells(entry.data.stars) : 0;
-      const lockCount = entry ? countLockSelections(entry.data.locks) : 0;
-      const currentWearCount = entry ? countCurrentWearSelections(entry.data.currentWear) : 0;
-      const currentScoreText = entry && String(entry.data.currentScore || '').trim() !== '' && Number(entry.data.currentScore) > 0 ? Number(entry.data.currentScore).toLocaleString() : '未录入';
       const displayName = getCacheSlotDisplayName(index);
       const rawName = sanitizeCacheSlotName(cacheSlotNames[index]) || displayName;
-      const meta = entry
-        ? `保存时间：${formatCacheTime(entry.savedAt)}｜主表已填 ${filled}/${SUITS.length * PARTS.length} 格｜锁定穿戴 ${lockCount} 项｜当前穿戴 ${currentWearCount} 项｜当前抗魔：${currentScoreText}`
-        : '当前为空，可把本页数据保存到这里（包含主表、锁定穿戴、当前穿戴、至少N件等设置）。';
       return `<div class="cache-slot${entry ? '' : ' empty'}">
         <div class="cache-slot-top">
           <div>
@@ -2220,8 +2423,6 @@
               <input class="cache-slot-name-input" type="text" maxlength="24" data-cache-name-input="${index}" value="${escapeHtml(rawName)}" placeholder="缓存 ${index + 1}">
               <div class="cache-slot-title">槽位 ${index + 1}</div>
             </div>
-            <div class="cache-slot-meta">${meta}</div>
-            <div class="cache-slot-name-tip">输入名称后按回车或点别处即可保存名称。</div>
           </div>
           <div class="cache-slot-actions">
             <button type="button" class="primary" data-cache-action="save" data-slot="${index}">保存到这里</button>
@@ -2257,7 +2458,7 @@
   }
   function openCacheModal(){
     renderCacheSlots();
-    cachePreview.textContent = '请选择一个缓存位进行保存、读取或删除。缓存名称可直接编辑，缓存会保留主表、锁定穿戴、当前穿戴和至少N件设置。';
+    cachePreview.textContent = '请选择一个缓存位进行保存、读取或删除。';
     cachePreview.classList.remove('error');
     cacheModal.classList.add('show');
   }
@@ -2577,7 +2778,7 @@
     cacheCloseBtn.addEventListener('click', closeCacheModal);
     detailCloseBtn.addEventListener('click', closeDetailModal);
     inventoryModal.addEventListener('click', event => { if(event.target === inventoryModal) closeInventoryModal(); });
-    recognitionModal?.addEventListener('click', event => { if(event.target === recognitionModal) closeRecognitionModal(); });
+    recognitionModal?.addEventListener('click', event => { if(event.target === recognitionModal) event.stopPropagation(); });
     importModal.addEventListener('click', event => { if(event.target === importModal) event.stopPropagation(); });
     exportModal.addEventListener('click', event => { if(event.target === exportModal) closeExportModal(); });
     cacheModal.addEventListener('click', event => { if(event.target === cacheModal) closeCacheModal(); });
@@ -2597,7 +2798,7 @@
     document.addEventListener('keydown', event => {
       if(event.key !== 'Escape') return;
       if(detailModal.classList.contains('show')) closeDetailModal();
-      if(recognitionModal?.classList.contains('show')) closeRecognitionModal();
+      if(recognitionModal?.classList.contains('show')) return;
       if(exportModal.classList.contains('show')) closeExportModal();
       if(cacheModal.classList.contains('show')) closeCacheModal();
       if(inventoryModal.classList.contains('show')) closeInventoryModal();
