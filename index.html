@@ -199,18 +199,15 @@
     .import-textarea:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
     .import-order{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#f8fbff;color:var(--muted);font-size:13px;line-height:1.75}
 
-    .cache-slots{display:grid;gap:10px;max-height:min(70vh,620px);overflow:auto;padding-right:2px}
-    .cache-slot{border:1px solid var(--line);border-radius:14px;background:#fbfdff;padding:12px;display:grid;gap:10px}
+    .cache-slots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:min(70vh,620px);overflow:auto;padding-right:2px}
+    .cache-slot{border:1px solid var(--line);border-radius:14px;background:#fbfdff;padding:10px;display:grid;gap:8px}
     .cache-slot.empty{background:#fff}
-    .cache-slot-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
-    .cache-slot-title{font-size:16px;font-weight:900;line-height:1.3}
-    .cache-slot-name-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
-    .cache-slot-name-input{width:min(260px,100%);height:40px;border:1px solid #cdd5e1;border-radius:10px;background:#fff;padding:0 12px;font-size:15px;color:var(--text);outline:none}
+    .cache-slot-top{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
+    .cache-slot-name-row{display:block;margin:0}
+    .cache-slot-name-input{width:100%;height:36px;border:1px solid #cdd5e1;border-radius:10px;background:#fff;padding:0 10px;font-size:14px;color:var(--text);outline:none}
     .cache-slot-name-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
-    .cache-slot-name-tip{font-size:12px;color:var(--muted);line-height:1.5}
-    .cache-slot-meta{font-size:13px;color:var(--muted);line-height:1.6}
-    .cache-slot-actions{display:flex;gap:8px;flex-wrap:wrap}
-    .cache-slot-actions button{border:1px solid var(--line);background:#fff;border-radius:12px;min-height:42px;padding:0 14px;font-size:14px;color:var(--text);cursor:pointer;transition:.12s transform,.12s box-shadow}
+    .cache-slot-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+    .cache-slot-actions button{border:1px solid var(--line);background:#fff;border-radius:10px;min-height:36px;padding:0 12px;font-size:13px;color:var(--text);cursor:pointer;transition:.12s transform,.12s box-shadow}
     .cache-slot-actions button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
     .cache-slot-actions button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
     .cache-slot-actions button:disabled{opacity:.48;cursor:not-allowed;transform:none;box-shadow:none}
@@ -281,6 +278,9 @@
       .tab-btn,.calc-bar button{font-size:15px}
       .calc-bar{padding:10px}
       .calc-bar button{width:100%}
+      .cache-slots{grid-template-columns:1fr}
+      .cache-slot-top{grid-template-columns:1fr}
+      .cache-slot-actions{justify-content:flex-start}
     }
   </style>
 </head>
@@ -510,6 +510,8 @@
   const headRow = document.getElementById('headRow');
   const floatingHeadRow = document.getElementById('floatingHeadRow');
   const bodyRows = document.getElementById('bodyRows');
+  const lockGroup = document.getElementById('lockGroup');
+  const currentGroup = document.getElementById('currentGroup');
   const lockBar = document.getElementById('lockBar');
   const currentWearBar = document.getElementById('currentWearBar');
   const currentSummary = document.getElementById('currentSummary');
@@ -649,6 +651,13 @@
       const toastId = node.dataset.toastId;
       if(toastId) removeToast(toastId);
     });
+  }
+
+  function applyDesktopDefaultExpandedGroups(){
+    if(window.matchMedia('(min-width: 901px)').matches){
+      lockGroup?.setAttribute('open', '');
+      currentGroup?.setAttribute('open', '');
+    }
   }
 
 
@@ -2418,14 +2427,11 @@
       const rawName = sanitizeCacheSlotName(cacheSlotNames[index]) || displayName;
       return `<div class="cache-slot${entry ? '' : ' empty'}">
         <div class="cache-slot-top">
-          <div>
-            <div class="cache-slot-name-row">
-              <input class="cache-slot-name-input" type="text" maxlength="24" data-cache-name-input="${index}" value="${escapeHtml(rawName)}" placeholder="缓存 ${index + 1}">
-              <div class="cache-slot-title">槽位 ${index + 1}</div>
-            </div>
+          <div class="cache-slot-name-row">
+            <input class="cache-slot-name-input" type="text" maxlength="24" data-cache-name-input="${index}" value="${escapeHtml(rawName)}" placeholder="缓存 ${index + 1}">
           </div>
           <div class="cache-slot-actions">
-            <button type="button" class="primary" data-cache-action="save" data-slot="${index}">保存到这里</button>
+            <button type="button" class="primary" data-cache-action="save" data-slot="${index}">保存</button>
             <button type="button" data-cache-action="load" data-slot="${index}" ${entry ? '' : 'disabled'}>读取</button>
             <button type="button" data-cache-action="delete" data-slot="${index}" ${entry ? '' : 'disabled'}>删除</button>
           </div>
@@ -2805,6 +2811,7 @@
     });
   }
 
+  applyDesktopDefaultExpandedGroups();
   bindStaticEvents();
   bindFloatingHeaderEvents();
   renderHead();
