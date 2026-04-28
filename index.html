@@ -26,6 +26,7 @@
     }
     .toolbar button:hover,.modal-actions button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
     .toolbar .primary,.modal-actions .primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+    .toolbar .calc-toolbar-btn{margin-left:auto;padding:0 24px;font-weight:900}
 
 
     .table-actions{padding:0 12px 12px;display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;align-items:flex-end}
@@ -56,7 +57,7 @@
     .inline-calc-btn{border:1px solid var(--blue);background:var(--blue);color:#fff;border-radius:12px;min-height:40px;padding:0 16px;font-size:14px;font-weight:800;cursor:pointer;transition:.12s transform,.12s box-shadow}
     .inline-calc-btn:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
     .plan-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:2px}
-    .apply-current-btn{border:1px solid var(--blue);background:var(--blue);color:#fff;border-radius:12px;min-height:40px;padding:0 14px;font-size:14px;font-weight:800;cursor:pointer;transition:.12s transform,.12s box-shadow}
+    .apply-current-btn{display:inline-flex;align-items:center;justify-content:center;margin-left:8px;vertical-align:middle;border:1px solid var(--blue);background:var(--blue);color:#fff;border-radius:12px;min-height:34px;padding:0 12px;font-size:13px;font-weight:800;cursor:pointer;transition:.12s transform,.12s box-shadow}
     .apply-current-btn:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
 
     .tabs{display:flex;gap:8px;padding:8px}
@@ -137,6 +138,8 @@
     .plan-group{display:inline-flex;align-items:center;gap:6px;max-width:100%;border:1px solid rgba(0,0,0,.08);background:#fff;border-radius:999px;padding:6px 10px;font-size:14px;line-height:1.4}
     .plan-group .group-name{font-weight:900;color:var(--text)}
     .plan-group .group-items{color:var(--muted);font-weight:700}
+    .plan-part{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+    .plan-part.changed{color:var(--red);font-weight:900}
     .suit-name.suit-green{color:var(--green)}
     .suit-name.suit-red{color:var(--red)}
     .suit-cell{display:grid;justify-items:center;gap:6px;line-height:1.15;padding:2px 0}
@@ -265,6 +268,7 @@
       .hero h1{font-size:25px}
       .hero p{font-size:15px}
       .toolbar button{flex:1 1 calc(50% - 5px);font-size:15px;min-height:48px}
+      .toolbar .calc-toolbar-btn{margin-left:0}
       .lock-grid,.current-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
       .current-top{grid-template-columns:1fr}
       .recognition-top{grid-template-columns:1fr}
@@ -322,8 +326,9 @@
           <button id="clearLocksBtn" type="button">清空锁定</button>
           <button id="clearCurrentBtn" type="button">清空当前穿戴和抗魔</button>
           <button id="cacheBtn" type="button">数据存储</button>
+          <button class="primary calc-toolbar-btn" id="calculateBtn" type="button">计算</button>
         </div>
-        <div class="status hide" id="statusBox">修改输入后不会自动计算。主表星级填 0-5；点击 ★ 录入库存会自动回填这件装备的最高可达星级。完成后请点击页面底部“计算”。</div>
+        <div class="status hide" id="statusBox">修改输入后不会自动计算。主表星级填 0-5；点击 ★ 录入库存会自动回填这件装备的最高可达星级。完成后请点击“计算”。</div>
       </section>
 
       <details class="card group" id="lockGroup">
@@ -363,9 +368,6 @@
         </div>
       </section>
 
-      <section class="card calc-bar">
-        <button id="calculateBtn" type="button">计算</button>
-      </section>
     </section>
 
     <section class="tab-panel" id="resultsTabPanel">
@@ -419,7 +421,7 @@
 
   <div class="modal" id="recognitionModal">
     <div class="modal-card recognition-card">
-      <h3 class="modal-title">识别图片导入（实验版）</h3>
+      <h3 class="modal-title">识别图片导入</h3>
       <p class="modal-sub">上传固定版式截图后，系统会优先识别每套 11 个部位的星级，并尽量自动识别套装名称。识别结果会先展示给你检查；星级数字串支持直接自由编辑，确认无误后再导入到主表中。</p>
       <div class="recognition-top">
         <div class="recognition-uploader">
@@ -431,7 +433,7 @@
           <div>识别出的 11 位数字顺序为：胸、腿、肩、腰、鞋、<span class="recognition-highlight">手镯、项链</span>、戒指、辅助装备、魔法石、耳环。</div>
         </div>
       </div>
-      <div class="recognition-warning">这是实验版功能。星级识别针对固定截图样式做了专项适配；若你上传的是其他界面、缩略图或裁切过的图片，结果可能不准。</div>
+      <div class="recognition-warning">星级识别针对固定截图样式做了专项适配；若你上传的是其他界面、缩略图或裁切过的图片，结果可能不准。</div>
       <div class="recognition-grid" id="recognitionGrid"></div>
       <div class="modal-bottom">
         <div class="preview" id="recognitionPreview">请先选择图片，然后点击“开始识别”。</div>
@@ -1530,7 +1532,7 @@
     state.inventory = defaultInventory();
     saveState();
     closeRecognitionModal();
-    markDirty('图片识别结果已导入到主表，请点击页面底部“计算”。');
+    markDirty('图片识别结果已导入到主表，请点击“计算”。');
     showToast('图片识别结果已导入。', 'ok');
   }
 
@@ -1562,7 +1564,7 @@
     renderTable({});
     resultsBox.innerHTML = '';
     bindDynamicEvents();
-    setStatus(message || '输入已更新。修改后不会自动计算，请点击页面底部“计算”。', false, silent);
+    setStatus(message || '输入已更新。修改后不会自动计算，请点击“计算”。', false, silent);
     renderResultCalcPrompt();
     updateFloatingHeaderVisibility();
   }
@@ -1636,7 +1638,7 @@
       openSetTargetMenu = '';
     }
     saveState();
-    markDirty(type === 'disabled' ? '禁用套装已更新，请点击页面底部“计算”。' : '套装件数约束已更新，请点击页面底部“计算”。');
+    markDirty(type === 'disabled' ? '禁用套装已更新，请点击“计算”。' : '套装件数约束已更新，请点击“计算”。');
   }
   function clearSetTargetSelection(type){
     if(type === 'disabled') state.disabledSuits = defaultDisabledSuits();
@@ -1644,7 +1646,7 @@
     else state.setTargets[type] = null;
     openSetTargetMenu = '';
     saveState();
-    markDirty(type === 'disabled' ? '禁用套装已更新，请点击页面底部“计算”。' : '套装件数约束已更新，请点击页面底部“计算”。');
+    markDirty(type === 'disabled' ? '禁用套装已更新，请点击“计算”。' : '套装件数约束已更新，请点击“计算”。');
   }
   function getRequiredCountBySuit(){
 
@@ -1860,7 +1862,7 @@
         const idx = Number(event.target.dataset.part);
         state.locks[idx] = normalizeLockValue(idx, event.target.value);
         saveState();
-        markDirty('锁定已更新，请点击页面底部“计算”。');
+        markDirty('锁定已更新，请点击“计算”。');
       };
     });
   }
@@ -1904,7 +1906,7 @@
         }
         else { state.currentWear[idx] = {type:'b70', suitIndex:null, b70Token:value, star:0}; }
         saveState();
-        markDirty('当前穿戴已更新，请点击页面底部“计算”。');
+        markDirty('当前穿戴已更新，请点击“计算”。');
       };
     });
     currentWearBar.querySelectorAll('.current-star').forEach(select => {
@@ -1916,7 +1918,7 @@
         const idx = Number(event.target.dataset.starPart);
         state.currentWear[idx].star = clampInt(event.target.value, 0, 5);
         saveState();
-        markDirty('当前穿戴星级已更新，请点击页面底部“计算”。');
+        markDirty('当前穿戴星级已更新，请点击“计算”。');
       };
     });
     currentScoreInput.oninput = event => {
@@ -1924,7 +1926,7 @@
       state.currentScore = cleaned === '' ? '' : String(clampInt(cleaned, 0, 999999999));
       event.target.value = state.currentScore;
       saveState();
-      markDirty('当前抗魔值已更新，请点击页面底部“计算”。');
+      markDirty('当前抗魔值已更新，请点击“计算”。');
     };
     const evalResult = evaluateCurrentWear();
     currentSummary.innerHTML = [
@@ -2040,17 +2042,13 @@
     bodyRows.innerHTML = SUITS.map((_, suitIndex) => {
       const disabled = !!state.disabledSuits[suitIndex];
       const cols = PARTS.map((__, partIndex) => {
-        const key = `${suitIndex}-${partIndex}`;
-        const ranks = highlightMap[key] || [];
         const lockInfo = getLockInfo(partIndex);
         const lockedChoice = lockInfo?.type === 'suit' && lockInfo.suitIndex === suitIndex;
         const use70B = lockInfo?.type === 'b70';
-        const tdClass = [ranks.length ? `rank${Math.min(...ranks)}` : '', use70B ? 'part70b' : '', lockedChoice ? 'locked-choice' : ''].filter(Boolean).join(' ');
+        const tdClass = [use70B ? 'part70b' : '', lockedChoice ? 'locked-choice' : ''].filter(Boolean).join(' ');
         const inv = state.inventory[suitIndex][partIndex];
         const hasInventory = [1,2,3,4,5].some(s => (inv[s] || 0) > 0);
-        const badges = ranks.map(rank => `<span class="badge b${rank}">${rank}</span>`).join('');
-        const badgesClass = `badges${ranks.length > 3 ? ' badges-crowded' : ''}`;
-        return `<td class="${tdClass}"><div class="cell"><input class="star-input" type="number" min="0" max="5" step="1" inputmode="numeric" value="${state.stars[suitIndex][partIndex]}" data-suit="${suitIndex}" data-part="${partIndex}"><button class="mini ${hasInventory ? 'active' : ''}" type="button" data-action="inventory" data-suit="${suitIndex}" data-part="${partIndex}" tabindex="-1">★</button><div class="${badgesClass}">${badges}</div></div></td>`;
+        return `<td class="${tdClass}"><div class="cell"><input class="star-input" type="number" min="0" max="5" step="1" inputmode="numeric" value="${state.stars[suitIndex][partIndex]}" data-suit="${suitIndex}" data-part="${partIndex}"><button class="mini ${hasInventory ? 'active' : ''}" type="button" data-action="inventory" data-suit="${suitIndex}" data-part="${partIndex}" tabindex="-1">★</button></div></td>`;
       }).join('');
       const head = `<div class="suit-cell">${getSuitLabelHtml(suitIndex)}${disabled ? '<span class="suit-disabled-tag">已禁</span>' : ''}</div>`;
       return `<tr class="${disabled ? 'suit-disabled' : ''}"><th>${head}</th>${cols}</tr>`;
@@ -2223,6 +2221,28 @@
     return map;
   }
 
+  function getCurrentWearKeyForPart(partIndex){
+    const curr = state.currentWear?.[partIndex] || {};
+    if(curr.type === 'b70' && curr.b70Token) return `b70:${curr.b70Token}`;
+    if(curr.type === 'suit' && curr.suitIndex !== null && curr.suitIndex !== undefined) return `s:${curr.suitIndex}`;
+    return '';
+  }
+
+  function getPlanWearKeyForPart(plan, partIndex){
+    if(plan.fixedB70?.[partIndex]) return `b70:${B70_BY_PART[partIndex]?.token || ''}`;
+    const suitIndex = plan.assignment?.[partIndex];
+    return Number.isInteger(suitIndex) && suitIndex >= 0 ? `s:${suitIndex}` : '';
+  }
+
+  function isPlanPartChangedFromCurrent(plan, partIndex){
+    return getPlanWearKeyForPart(plan, partIndex) !== getCurrentWearKeyForPart(partIndex);
+  }
+
+  function renderPlanPartToken(plan, partIndex, label){
+    const changed = isPlanPartChangedFromCurrent(plan, partIndex);
+    return `<span class="plan-part${changed ? ' changed' : ''}"${changed ? ' title="与当前穿戴不同，需要更换"' : ''}>${escapeHtml(label)}</span>`;
+  }
+
   function renderPlanRow(plan, currentEval, planIndex){
     const grouped = [];
     for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
@@ -2231,27 +2251,25 @@
         if(plan.fixedB70[partIndex]) continue;
         if(plan.assignment[partIndex] !== suitIndex) continue;
         const star = state.stars[suitIndex][partIndex];
-        items.push(`${PARTS[partIndex]}${star}星`);
+        items.push(renderPlanPartToken(plan, partIndex, `${PARTS[partIndex]}${star}星`));
       }
       if(items.length){
         grouped.push(`<span class="plan-group"><span class="group-name">${getSuitLabelHtml(suitIndex)}</span><span class="group-items">${items.join('、')}</span></span>`);
       }
     }
-    const b70Items = B70_OPTIONS.filter(option => plan.fixedB70[option.partIndex]).map(option => PARTS[option.partIndex]);
+    const b70Items = B70_OPTIONS.filter(option => plan.fixedB70[option.partIndex]).map(option => renderPlanPartToken(plan, option.partIndex, PARTS[option.partIndex]));
     if(b70Items.length){
       grouped.push(`<span class="plan-group"><span class="group-name">70B</span><span class="group-items">${b70Items.join('、')}</span></span>`);
     }
     const showFinal = currentEval.currentScoreNum > 0;
     const finalScore = showFinal ? (currentEval.currentScoreNum + plan.totalScore - currentEval.total) : null;
     const finalPart = showFinal
-      ? `；更换装备后的最终抗魔（有浮动）：<span class="final-inline">${finalScore.toLocaleString()}</span>`
-      : '；更换装备后的最终抗魔（有浮动）：<span class="muted">未录入换装前角色总抗魔</span>';
+      ? `；更换装备后的最终抗魔：<span class="final-inline">${finalScore.toLocaleString()}</span>`
+      : '；更换装备后的最终抗魔：<span class="muted">未录入换装前角色总抗魔</span>';
     return `<div class="result-lines">
-      <div class="result-line metrics">基础：${plan.baseScore.toLocaleString()}；加成抗魔：${plan.bonusScore.toLocaleString()}<button type="button" class="hint-btn" data-detail-type="plan-bonus" data-plan-index="${planIndex}">明细</button>${finalPart}</div>
+      <div class="result-line metrics">基础：${plan.baseScore.toLocaleString()}；加成抗魔：${plan.bonusScore.toLocaleString()}<button type="button" class="hint-btn" data-detail-type="plan-bonus" data-plan-index="${planIndex}">明细</button>${finalPart}<button type="button" class="apply-current-btn" data-action="apply-plan-cache" data-plan-index="${planIndex}">选择并缓存</button></div>
       <div class="result-line plan">
-        <div>穿戴方案（<span class="plan-note" style="color:var(--red);font-weight:800;">请仔细确认拥有或可升级到以下星级装备</span>）</div>
         <div class="plan-group-list">${grouped.join('')}</div>
-        <div class="plan-actions"><button type="button" class="apply-current-btn" data-action="apply-plan-cache" data-plan-index="${planIndex}">替换当前穿戴和抗魔并选择缓存位</button></div>
       </div>
     </div>`;
   }
@@ -2630,7 +2648,7 @@
     state = sanitizeStateSnapshot(entry.data || entry);
     saveState();
     closeCacheModal();
-    markDirty(`已读取${getCacheSlotDisplayName(slotIndex)}，锁定穿戴和当前穿戴也已一并恢复，请点击页面底部“计算”。`);
+    markDirty(`已读取${getCacheSlotDisplayName(slotIndex)}，锁定穿戴和当前穿戴也已一并恢复，请点击“计算”。`);
   }
   function deleteCacheSlot(slotIndex){
     if(!cacheSlotState[slotIndex]){
@@ -2734,7 +2752,7 @@
     state.inventory = defaultInventory();
     saveState();
     closeImportModal();
-    markDirty('批量导入完成，主表已更新，请点击页面底部“计算”。');
+    markDirty('批量导入完成，主表已更新，请点击“计算”。');
   }
   function openInventoryModal(suitIndex, partIndex){
     inventoryEditing = {suitIndex, partIndex};
@@ -2761,7 +2779,7 @@
     state.stars[inventoryEditing.suitIndex][inventoryEditing.partIndex] = result.maxStar;
     saveState();
     closeInventoryModal();
-    markDirty('库存已更新，请点击页面底部“计算”。');
+    markDirty('库存已更新，请点击“计算”。');
   }
 
   function syncFloatingHeaderGeometry(){
@@ -2830,7 +2848,7 @@
     const plans = result.plans.slice(0, TOP_K);
     lastComputedPlans = plans;
     renderResults(plans, currentEval);
-    renderTable(buildHighlightMap(plans));
+    renderTable({});
     bindDynamicEvents();
     updateFloatingHeaderVisibility();
     setStatus('计算完成。当前结果已更新。');
@@ -2839,16 +2857,16 @@
   }
 
 
-  function clearTableData(){ state.stars = defaultMatrix(); state.inventory = defaultInventory(); saveState(); markDirty('主表数据已清空，请点击页面底部“计算”。'); }
+  function clearTableData(){ state.stars = defaultMatrix(); state.inventory = defaultInventory(); saveState(); markDirty('主表数据已清空，请点击“计算”。'); }
   function clearLocks(){
     state.locks = defaultLocks();
     state.disabledSuits = defaultDisabledSuits();
     state.setTargets = defaultSetTargets();
     saveState();
-    markDirty('锁定、禁用和至少N件约束已清空，请点击页面底部“计算”。');
+    markDirty('锁定、禁用和至少N件约束已清空，请点击“计算”。');
   }
-  function clearCurrent(){ state.currentScore = ''; state.currentWear = defaultCurrentWear(); saveState(); markDirty('当前装备和抗魔已清空，请点击页面底部“计算”。'); }
-  function fillRandom(){ state.stars = SUITS.map(() => PARTS.map(() => Math.floor(Math.random() * 6))); state.inventory = defaultInventory(); saveState(); markDirty('已填入随机测试数据，请点击页面底部“计算”。'); }
+  function clearCurrent(){ state.currentScore = ''; state.currentWear = defaultCurrentWear(); saveState(); markDirty('当前装备和抗魔已清空，请点击“计算”。'); }
+  function fillRandom(){ state.stars = SUITS.map(() => PARTS.map(() => Math.floor(Math.random() * 6))); state.inventory = defaultInventory(); saveState(); markDirty('已填入随机测试数据，请点击“计算”。'); }
 
   function bindStaticEvents(){
     inputTabBtn.addEventListener('click', () => switchTab('input'));
