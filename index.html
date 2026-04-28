@@ -55,6 +55,9 @@
     .result-status-inline{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
     .inline-calc-btn{border:1px solid var(--blue);background:var(--blue);color:#fff;border-radius:12px;min-height:40px;padding:0 16px;font-size:14px;font-weight:800;cursor:pointer;transition:.12s transform,.12s box-shadow}
     .inline-calc-btn:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
+    .plan-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:2px}
+    .apply-current-btn{border:1px solid var(--blue);background:var(--blue);color:#fff;border-radius:12px;min-height:40px;padding:0 14px;font-size:14px;font-weight:800;cursor:pointer;transition:.12s transform,.12s box-shadow}
+    .apply-current-btn:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
 
     .tabs{display:flex;gap:8px;padding:8px}
     .tab-btn{flex:1;border:1px solid var(--line);background:#fff;border-radius:14px;min-height:48px;padding:0 14px;font-size:16px;font-weight:800;color:var(--text);cursor:pointer}
@@ -211,6 +214,17 @@
     .cache-slot-actions button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(15,23,42,.08)}
     .cache-slot-actions button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
     .cache-slot-actions button:disabled{opacity:.48;cursor:not-allowed;transform:none;box-shadow:none}
+    .plan-cache-card{width:min(680px,100%);padding:14px}
+    .plan-cache-card .modal-title{font-size:20px;margin-bottom:4px}
+    .plan-cache-card .modal-sub{margin-bottom:8px;line-height:1.55}
+    .plan-cache-card .modal-bottom{margin-top:10px;padding-top:8px}
+    .plan-cache-slots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;max-height:min(58vh,500px);overflow:auto;padding-right:2px}
+    .plan-cache-slot{border:1px solid var(--line);border-radius:12px;background:#fbfdff;padding:7px 8px;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title action" "meta action";gap:2px 8px;align-items:center}
+    .plan-cache-slot.empty{background:#fff}
+    .plan-cache-slot-title{grid-area:title;font-size:14px;font-weight:900;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .plan-cache-slot-meta{grid-area:meta;font-size:11px;line-height:1.35;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .plan-cache-slot button{grid-area:action;border:1px solid var(--blue);background:var(--blue);color:#fff;border-radius:9px;min-height:30px;padding:0 9px;font-size:12px;font-weight:800;cursor:pointer;transition:.12s transform,.12s box-shadow;white-space:nowrap}
+    .plan-cache-slot button:hover{transform:translateY(-1px);box-shadow:0 6px 14px rgba(15,23,42,.08)}
 
     .toast-wrap{position:fixed;top:16px;right:16px;z-index:120;display:grid;gap:10px;pointer-events:none;max-width:min(420px,calc(100vw - 24px))}
     .toast{pointer-events:auto;display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.98);box-shadow:0 12px 28px rgba(15,23,42,.14);color:var(--text);font-size:14px;line-height:1.65;transform:translateY(-8px);opacity:0;transition:opacity .18s ease,transform .18s ease}
@@ -279,6 +293,7 @@
       .calc-bar{padding:10px}
       .calc-bar button{width:100%}
       .cache-slots{grid-template-columns:1fr}
+      .plan-cache-slots{grid-template-columns:1fr}
       .cache-slot-top{grid-template-columns:1fr}
       .cache-slot-actions{justify-content:flex-start}
     }
@@ -458,6 +473,20 @@
     </div>
   </div>
 
+  <div class="modal" id="planCacheModal">
+    <div class="modal-card plan-cache-card">
+      <h3 class="modal-title" id="planCacheTitle">选择缓存位</h3>
+      <p class="modal-sub">选择后会立即替换“当前穿戴和抗魔”，并保存到该缓存位；已有数据会被覆盖。</p>
+      <div class="plan-cache-slots" id="planCacheSlots"></div>
+      <div class="modal-bottom">
+        <div class="preview" id="planCachePreview">请选择一个缓存位。</div>
+        <div class="modal-actions">
+          <button type="button" class="primary" id="planCacheCancelBtn">取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="detailModal">
     <div class="modal-card detail-card">
       <h3 class="modal-title" id="detailTitle">计算明细</h3>
@@ -567,6 +596,11 @@
   const cachePreview = document.getElementById('cachePreview');
   const toastWrap = document.getElementById('toastWrap');
   const cacheCloseBtn = document.getElementById('cacheCloseBtn');
+  const planCacheModal = document.getElementById('planCacheModal');
+  const planCacheTitle = document.getElementById('planCacheTitle');
+  const planCacheSlots = document.getElementById('planCacheSlots');
+  const planCachePreview = document.getElementById('planCachePreview');
+  const planCacheCancelBtn = document.getElementById('planCacheCancelBtn');
   const setTargetBar = document.getElementById('setTargetBar');
   const detailModal = document.getElementById('detailModal');
   const detailTitle = document.getElementById('detailTitle');
@@ -576,6 +610,7 @@
 
   let inventoryEditing = null;
   let lastComputedPlans = [];
+  let pendingApplyPlanIndex = null;
   let openSetTargetMenu = '';
   let recognitionImageFile = null;
   let recognitionImageUrl = '';
@@ -1862,7 +1897,11 @@
         const idx = Number(event.target.dataset.part);
         const value = event.target.value;
         if(!value){ state.currentWear[idx] = {type:'', suitIndex:null, b70Token:'', star:0}; }
-        else if(value.startsWith('s:')){ state.currentWear[idx] = {type:'suit', suitIndex:clampInt(value.slice(2),0,SUITS.length-1), b70Token:'', star:Math.max(1, state.currentWear[idx].star || 1)}; }
+        else if(value.startsWith('s:')){
+          const suitIndex = clampInt(value.slice(2),0,SUITS.length-1);
+          const tableStar = clampInt(state.stars?.[suitIndex]?.[idx] ?? 0, 0, 5);
+          state.currentWear[idx] = {type:'suit', suitIndex, b70Token:'', star:tableStar};
+        }
         else { state.currentWear[idx] = {type:'b70', suitIndex:null, b70Token:value, star:0}; }
         saveState();
         markDirty('当前穿戴已更新，请点击页面底部“计算”。');
@@ -2209,7 +2248,11 @@
       : '；更换装备后的最终抗魔（有浮动）：<span class="muted">未录入换装前角色总抗魔</span>';
     return `<div class="result-lines">
       <div class="result-line metrics">基础：${plan.baseScore.toLocaleString()}；加成抗魔：${plan.bonusScore.toLocaleString()}<button type="button" class="hint-btn" data-detail-type="plan-bonus" data-plan-index="${planIndex}">明细</button>${finalPart}</div>
-      <div class="result-line plan"><div>穿戴方案（<span class="plan-note" style="color:var(--red);font-weight:800;">请仔细确认拥有或可升级到以下星级装备</span>）</div><div class="plan-group-list">${grouped.join('')}</div></div>
+      <div class="result-line plan">
+        <div>穿戴方案（<span class="plan-note" style="color:var(--red);font-weight:800;">请仔细确认拥有或可升级到以下星级装备</span>）</div>
+        <div class="plan-group-list">${grouped.join('')}</div>
+        <div class="plan-actions"><button type="button" class="apply-current-btn" data-action="apply-plan-cache" data-plan-index="${planIndex}">替换当前穿戴和抗魔并选择缓存位</button></div>
+      </div>
     </div>`;
   }
 
@@ -2226,6 +2269,107 @@
       blocks.push(`<details class="rank-card rank${rank}" open><summary><span class="summary-main">${label}：总抗魔 ${plan.totalScore.toLocaleString()}</span><span class="summary-right">点击展开</span></summary><div class="rank-body">${renderPlanRow(plan, currentEval, index)}</div></details>`);
     });
     resultsBox.innerHTML = blocks.join('');
+  }
+
+  function buildCurrentWearFromPlan(plan){
+    return PARTS.map((_, partIndex) => {
+      if(plan.fixedB70[partIndex]){
+        const option = B70_BY_PART[partIndex];
+        return {type:'b70', suitIndex:null, b70Token:option?.token || '', star:0};
+      }
+      const suitIndex = plan.assignment[partIndex];
+      const star = suitIndex >= 0 ? clampInt(state.stars?.[suitIndex]?.[partIndex] ?? 0, 0, 5) : 0;
+      return {type:'suit', suitIndex, b70Token:'', star};
+    });
+  }
+
+  function renderPlanCacheSlots(planIndex = pendingApplyPlanIndex){
+    if(!planCacheSlots) return;
+    const rankText = Number.isInteger(planIndex) ? `Top${planIndex + 1}` : '当前方案';
+    planCacheSlots.innerHTML = cacheSlotState.map((entry, index) => {
+      const name = getCacheSlotDisplayName(index);
+      const isEmpty = !entry;
+      const meta = isEmpty ? '空缓存位' : `已有数据｜${formatCacheTime(entry.savedAt)}`;
+      const actionText = isEmpty ? '保存' : '覆盖';
+      return `<div class="plan-cache-slot${isEmpty ? ' empty' : ''}">
+        <div class="plan-cache-slot-title">${escapeHtml(name)}</div>
+        <div class="plan-cache-slot-meta">${escapeHtml(meta)}</div>
+        <button type="button" data-plan-cache-slot="${index}">${actionText}</button>
+      </div>`;
+    }).join('');
+    if(planCacheTitle) planCacheTitle.textContent = `${rankText}：选择缓存位`;
+    if(planCachePreview){
+      planCachePreview.textContent = '请选择一个缓存位。已有数据的缓存位会被覆盖。';
+      planCachePreview.classList.remove('error');
+    }
+  }
+
+  function openPlanCacheModal(planIndex){
+    const plan = lastComputedPlans[planIndex];
+    if(!plan){
+      showToast('当前方案不存在，请重新计算。', 'error');
+      return;
+    }
+    pendingApplyPlanIndex = planIndex;
+    renderPlanCacheSlots(planIndex);
+    planCacheModal?.classList.add('show');
+  }
+
+  function closePlanCacheModal(){
+    pendingApplyPlanIndex = null;
+    planCacheModal?.classList.remove('show');
+  }
+
+  function saveCurrentStateToSelectedCache(slotIndex, label){
+    if(!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= CACHE_SLOT_COUNT){
+      return {saved:false, message:'请选择有效的缓存位。'};
+    }
+    if(!sanitizeCacheSlotName(cacheSlotNames[slotIndex])){
+      cacheSlotNames[slotIndex] = sanitizeCacheSlotName(label);
+      saveCacheSlotNames();
+    }
+    cacheSlotState[slotIndex] = {savedAt: new Date().toISOString(), data: cloneCurrentState()};
+    saveCacheSlots();
+    if(cacheModal?.classList.contains('show')) renderCacheSlots();
+    return {saved:true, slotIndex, name:getCacheSlotDisplayName(slotIndex)};
+  }
+
+  function applyPlanToCurrentAndCache(planIndex, slotIndex){
+    const plan = lastComputedPlans[planIndex];
+    if(!plan){
+      showToast('当前方案不存在，请重新计算。', 'error');
+      return;
+    }
+    const safeSlotIndex = clampInt(slotIndex, -1, CACHE_SLOT_COUNT - 1);
+    if(safeSlotIndex < 0){
+      if(planCachePreview){
+        planCachePreview.textContent = '请选择一个有效的缓存位。';
+        planCachePreview.classList.add('error');
+      }
+      showToast('请选择一个有效的缓存位。', 'error');
+      return;
+    }
+    const previousEval = evaluateCurrentWear();
+    const hasCurrentScore = previousEval.currentScoreNum > 0;
+    const nextCurrentScore = hasCurrentScore
+      ? previousEval.currentScoreNum + plan.totalScore - previousEval.total
+      : plan.totalScore;
+
+    state.currentWear = sanitizeCurrentWear(buildCurrentWearFromPlan(plan));
+    state.currentScore = String(Math.max(0, Math.round(nextCurrentScore)));
+    saveState();
+
+    const cacheResult = saveCurrentStateToSelectedCache(safeSlotIndex, `Top${planIndex + 1}替换后`);
+    closePlanCacheModal();
+    const currentEval = renderCurrentPanel();
+    renderResults(lastComputedPlans, currentEval);
+    updateFloatingHeaderVisibility();
+
+    const scoreNote = hasCurrentScore
+      ? `当前抗魔已更新为 ${Number(state.currentScore).toLocaleString()}。`
+      : `未录入换装前角色总抗魔，已暂按该方案装备抗魔 ${Number(state.currentScore).toLocaleString()} 写入当前抗魔。`;
+    const cacheNote = cacheResult.saved ? `已保存到${cacheResult.name}。` : cacheResult.message;
+    setStatus(`${getRankLabel(planIndex + 1)}已替换为当前穿戴。${scoreNote}${cacheNote}`);
   }
 
   function setStatus(message, isError = false, silent = false){
@@ -2743,6 +2887,22 @@
         return;
       }
       if(!event.target.closest('.set-target-control')) closeSetTargetMenus();
+      const applyPlanBtn = event.target.closest('[data-action="apply-plan-cache"]');
+      if(applyPlanBtn){
+        const planIndex = clampInt(applyPlanBtn.dataset.planIndex, 0, Math.max(0, lastComputedPlans.length - 1));
+        openPlanCacheModal(planIndex);
+        return;
+      }
+      const planCacheSlotBtn = event.target.closest('[data-plan-cache-slot]');
+      if(planCacheSlotBtn){
+        const slotIndex = clampInt(planCacheSlotBtn.dataset.planCacheSlot, -1, CACHE_SLOT_COUNT - 1);
+        if(pendingApplyPlanIndex === null){
+          showToast('当前没有待替换的方案，请重新选择。', 'error');
+          return;
+        }
+        applyPlanToCurrentAndCache(pendingApplyPlanIndex, slotIndex);
+        return;
+      }
       const detailBtn = event.target.closest('[data-detail-type]');
       if(!detailBtn) return;
       const type = detailBtn.dataset.detailType;
@@ -2782,12 +2942,14 @@
     exportCopyBtn.addEventListener('click', copyExportText);
     exportCloseBtn.addEventListener('click', closeExportModal);
     cacheCloseBtn.addEventListener('click', closeCacheModal);
+    planCacheCancelBtn?.addEventListener('click', closePlanCacheModal);
     detailCloseBtn.addEventListener('click', closeDetailModal);
     inventoryModal.addEventListener('click', event => { if(event.target === inventoryModal) closeInventoryModal(); });
     recognitionModal?.addEventListener('click', event => { if(event.target === recognitionModal) event.stopPropagation(); });
     importModal.addEventListener('click', event => { if(event.target === importModal) event.stopPropagation(); });
     exportModal.addEventListener('click', event => { if(event.target === exportModal) closeExportModal(); });
     cacheModal.addEventListener('click', event => { if(event.target === cacheModal) closeCacheModal(); });
+    planCacheModal?.addEventListener('click', event => { if(event.target === planCacheModal) closePlanCacheModal(); });
     detailModal.addEventListener('click', event => { if(event.target === detailModal) closeDetailModal(); });
     importTextarea.addEventListener('keydown', event => {
       if((event.ctrlKey || event.metaKey) && event.key === 'Enter'){
@@ -2807,6 +2969,7 @@
       if(recognitionModal?.classList.contains('show')) return;
       if(exportModal.classList.contains('show')) closeExportModal();
       if(cacheModal.classList.contains('show')) closeCacheModal();
+      if(planCacheModal?.classList.contains('show')) closePlanCacheModal();
       if(inventoryModal.classList.contains('show')) closeInventoryModal();
     });
   }
