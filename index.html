@@ -242,6 +242,9 @@
     .recognition-top{display:grid;grid-template-columns:minmax(260px,320px) minmax(0,1fr);gap:12px;align-items:start}
     .recognition-uploader{border:1px dashed #cdd5e1;border-radius:14px;background:#fbfdff;padding:12px;display:grid;gap:10px}
     .recognition-file{width:100%}
+    .recognition-paste-zone{border:1px dashed #b9c6d6;border-radius:12px;background:#fff;padding:10px 12px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6;outline:none;cursor:text}
+    .recognition-paste-zone:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12);color:var(--text)}
+    .recognition-paste-zone b{color:var(--blue)}
     .recognition-help{border:1px solid var(--line);border-radius:12px;background:#f8fbff;padding:12px;font-size:13px;line-height:1.75;color:var(--muted)}
     .recognition-help b{color:var(--text)}
     .recognition-highlight{color:var(--red);font-weight:900}
@@ -426,6 +429,7 @@
       <div class="recognition-top">
         <div class="recognition-uploader">
           <input id="recognitionFileInput" class="recognition-file" type="file" accept="image/*">
+          <div class="recognition-paste-zone" id="recognitionPasteZone" tabindex="0"><b>可直接粘贴图片</b><br>打开此窗口后按 Ctrl+V，或先点这里再粘贴截图。</div>
           <div class="recognition-progress" id="recognitionProgress">尚未开始识别。</div>
         </div>
         <div class="recognition-help">
@@ -436,7 +440,7 @@
       <div class="recognition-warning">星级识别针对固定截图样式做了专项适配；若你上传的是其他界面、缩略图或裁切过的图片，结果可能不准。</div>
       <div class="recognition-grid" id="recognitionGrid"></div>
       <div class="modal-bottom">
-        <div class="preview" id="recognitionPreview">请先选择图片，然后点击“开始识别”。</div>
+        <div class="preview" id="recognitionPreview">请先选择图片，或直接粘贴截图，然后点击“开始识别”。</div>
         <div class="modal-actions">
           <button type="button" id="recognitionStartBtn">开始识别</button>
           <button type="button" id="recognitionCancel">取消</button>
@@ -576,6 +580,7 @@
   const importTextarea = document.getElementById('importTextarea');
   const recognitionModal = document.getElementById('recognitionModal');
   const recognitionFileInput = document.getElementById('recognitionFileInput');
+  const recognitionPasteZone = document.getElementById('recognitionPasteZone');
   const recognitionThumbBox = document.getElementById('recognitionThumbBox');
   const recognitionProgress = document.getElementById('recognitionProgress');
   const recognitionGrid = document.getElementById('recognitionGrid');
@@ -731,6 +736,55 @@
     recognitionPreview.textContent = message;
     recognitionPreview.classList.toggle('error', !!isError);
   }
+  function normalizePastedImageFile(file){
+    if(!file || !String(file.type || '').startsWith('image/')) return null;
+    const extension = String(file.type || 'image/png').split('/')[1] || 'png';
+    const safeExtension = extension.replace(/[^a-z0-9]/gi, '') || 'png';
+    if(file.name) return file;
+    try {
+      return new File([file], `粘贴图片_${Date.now()}.${safeExtension}`, {type:file.type || 'image/png'});
+    } catch {
+      return file;
+    }
+  }
+  function setRecognitionImageFile(file, sourceLabel = '已选择图片'){
+    const imageFile = normalizePastedImageFile(file);
+    if(!imageFile){
+      setRecognitionPreview('没有读取到图片文件。', true);
+      showToast('没有读取到图片文件。', 'error');
+      return false;
+    }
+    recognitionImageFile = imageFile;
+    recognitionRows = [];
+    renderRecognitionRows();
+    const fileName = imageFile.name || '剪贴板图片';
+    setRecognitionPreview(`${sourceLabel}：${fileName}`);
+    setRecognitionProgress('图片已载入，点击“开始识别”。');
+    return true;
+  }
+  function getImageFileFromClipboardEvent(event){
+    const clipboardData = event?.clipboardData;
+    if(!clipboardData) return null;
+    const items = Array.from(clipboardData.items || []);
+    for(const item of items){
+      if(item.kind === 'file' && String(item.type || '').startsWith('image/')){
+        const file = item.getAsFile();
+        if(file) return normalizePastedImageFile(file);
+      }
+    }
+    const files = Array.from(clipboardData.files || []);
+    return files.find(file => String(file.type || '').startsWith('image/')) || null;
+  }
+  function handleRecognitionPaste(event){
+    if(!recognitionModal?.classList.contains('show')) return;
+    const imageFile = getImageFileFromClipboardEvent(event);
+    if(!imageFile) return;
+    event.preventDefault();
+    if(recognitionFileInput) recognitionFileInput.value = '';
+    if(setRecognitionImageFile(imageFile, '已粘贴图片')){
+      showToast('已从剪贴板载入图片。', 'success');
+    }
+  }
   function cleanupRecognitionPreviewImage(){
     if(recognitionImageUrl){
       URL.revokeObjectURL(recognitionImageUrl);
@@ -747,13 +801,14 @@
     recognitionBusy = false;
     renderRecognitionRows();
     setRecognitionProgress('尚未开始识别。');
-    setRecognitionPreview('请先选择图片，然后点击“开始识别”。');
+    setRecognitionPreview('请先选择图片，或直接粘贴截图，然后点击“开始识别”。');
     if(recognitionStartBtn) recognitionStartBtn.disabled = false;
     if(recognitionConfirm) recognitionConfirm.disabled = false;
   }
   function openRecognitionModal(){
     resetRecognitionState();
     recognitionModal?.classList.add('show');
+    setTimeout(() => recognitionPasteZone?.focus({preventScroll:true}), 0);
   }
   function closeRecognitionModal(){
     recognitionModal?.classList.remove('show');
@@ -2938,17 +2993,19 @@
     });
     recognitionFileInput?.addEventListener('change', event => {
       const file = event.target.files?.[0] || null;
-      recognitionImageFile = file;
-      recognitionRows = [];
-      renderRecognitionRows();
       if(file){
-        setRecognitionPreview(`已选择图片：${file.name}`);
-        setRecognitionProgress('图片已选择，点击“开始识别”。');
+        setRecognitionImageFile(file, '已选择图片');
       }else{
-        setRecognitionPreview('请先选择图片，然后点击“开始识别”。');
+        recognitionImageFile = null;
+        recognitionRows = [];
+        renderRecognitionRows();
+        setRecognitionPreview('请先选择图片，或直接粘贴截图，然后点击“开始识别”。');
         setRecognitionProgress('尚未开始识别。');
       }
     });
+    recognitionPasteZone?.addEventListener('click', () => recognitionPasteZone.focus());
+    recognitionPasteZone?.addEventListener('paste', handleRecognitionPaste);
+    document.addEventListener('paste', handleRecognitionPaste);
     recognitionStartBtn?.addEventListener('click', startRecognition);
     recognitionCancel?.addEventListener('click', closeRecognitionModal);
     recognitionConfirm?.addEventListener('click', confirmRecognitionImport);
