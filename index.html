@@ -440,7 +440,7 @@
       <div class="recognition-warning">星级识别针对固定截图样式做了专项适配；若你上传的是其他界面、缩略图或裁切过的图片，结果可能不准。</div>
       <div class="recognition-grid" id="recognitionGrid"></div>
       <div class="modal-bottom">
-        <div class="preview" id="recognitionPreview">请先选择图片，或直接粘贴截图，然后点击“开始识别”。</div>
+        <div class="preview" id="recognitionPreview"></div>
         <div class="modal-actions">
           <button type="button" id="recognitionStartBtn">开始识别</button>
           <button type="button" id="recognitionCancel">取消</button>
@@ -801,7 +801,7 @@
     recognitionBusy = false;
     renderRecognitionRows();
     setRecognitionProgress('尚未开始识别。');
-    setRecognitionPreview('请先选择图片，或直接粘贴截图，然后点击“开始识别”。');
+    setRecognitionPreview('');
     if(recognitionStartBtn) recognitionStartBtn.disabled = false;
     if(recognitionConfirm) recognitionConfirm.disabled = false;
   }
@@ -2999,7 +2999,7 @@
         recognitionImageFile = null;
         recognitionRows = [];
         renderRecognitionRows();
-        setRecognitionPreview('请先选择图片，或直接粘贴截图，然后点击“开始识别”。');
+        setRecognitionPreview('');
         setRecognitionProgress('尚未开始识别。');
       }
     });
