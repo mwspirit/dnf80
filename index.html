@@ -1109,7 +1109,7 @@
         await worker.setParameters({
           preserve_interword_spaces: '0',
           user_defined_dpi: '500',
-          tessedit_char_blacklist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz（）()：:当前套装抗魔*×xX+-_./[]{}|<>'
+          tessedit_char_blacklist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz（）()：:当前套装抗*×xX+-_./[]{}|<>'
         });
         recognitionNameWorkerPsm = null;
         return worker;
@@ -1347,7 +1347,7 @@
     const v = max / 255;
     return h >= 28 && h <= 66 && s >= 0.35 && v >= 0.45;
   }
-  function countGoldStars(canvas, cellRect){
+  function countGoldStars(canvas, cellRect, scale = 1){
     const ctx = canvas.getContext('2d');
     const sx = Math.max(0, Math.round(cellRect.x));
     const sy = Math.max(0, Math.round(cellRect.y));
@@ -1424,7 +1424,7 @@
             }
           }
         }
-        if(area >= 12) count++;
+        if(area >= Math.max(8, Math.round(12 * scale * scale))) count++;
       }
     }
     return Math.min(5, count);
@@ -1439,7 +1439,7 @@
         w: RECOGNITION_CELL_LAYOUT.width * scale,
         h: RECOGNITION_CELL_LAYOUT.height * scale
       };
-      digits[entry.partIndex] = countGoldStars(canvas, cellRect);
+      digits[entry.partIndex] = countGoldStars(canvas, cellRect, scale);
     });
     return digits;
   }
