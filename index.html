@@ -2203,7 +2203,17 @@
     return subsetScores;
   }
 
-  function pushTopK(arr, entry){ arr.push(entry); arr.sort((a,b) => b.score - a.score); if(arr.length > TOP_K) arr.length = TOP_K; }
+  function pushTopK(arr, entry){
+    arr.push(entry);
+    arr.sort((a,b) => b.score - a.score);
+    if(arr.length > TOP_K){
+      const kthScore = arr[TOP_K - 1].score;
+      let cutoff = TOP_K;
+      while(cutoff < arr.length && arr[cutoff].score === kthScore) cutoff++;
+      if(cutoff > TOP_K * 20) cutoff = TOP_K * 20;
+      arr.length = cutoff;
+    }
+  }
 
   function reconstructPlan(dp, finalEntry, finalRankIndex, fixedB70){
     const assignment = Array(PARTS.length).fill(-1);
@@ -2945,14 +2955,17 @@
       switchTab('input');
       return;
     }
-    const plans = result.plans.slice(0, TOP_K);
+    let plans = result.plans.slice(0, TOP_K);
+    if(plans.length === TOP_K && plans[TOP_K - 1].totalScore === plans[0].totalScore){
+      plans = result.plans.filter(p => p.totalScore === plans[0].totalScore);
+    }
     lastComputedPlans = plans;
     renderResults(plans, currentEval);
     renderTable({});
     bindDynamicEvents();
     updateFloatingHeaderVisibility();
     setStatus('计算完成。当前结果已更新。');
-    setResultStatus(`Top${TOP_K} 结果已更新。`);
+    setResultStatus(`Top${plans.length} 结果已更新。`);
     if(switchToResults) switchTab('results');
   }
 
