@@ -1853,13 +1853,13 @@
   }
   function cloneCurrentState(){
     return {
-      stars: sanitizeMatrix(JSON.parse(JSON.stringify(state.stars))),
-      inventory: sanitizeInventory(JSON.parse(JSON.stringify(state.inventory))),
-      locks: sanitizeLocks(JSON.parse(JSON.stringify(state.locks))),
-      disabledSuits: sanitizeDisabledSuits(JSON.parse(JSON.stringify(state.disabledSuits))),
+      stars: sanitizeMatrix(state.stars),
+      inventory: sanitizeInventory(state.inventory),
+      locks: sanitizeLocks(state.locks),
+      disabledSuits: sanitizeDisabledSuits(state.disabledSuits),
       currentScore: sanitizeCurrentScore(state.currentScore),
-      currentWear: sanitizeCurrentWear(JSON.parse(JSON.stringify(state.currentWear))),
-      setTargets: sanitizeSetTargets(JSON.parse(JSON.stringify(state.setTargets)))
+      currentWear: sanitizeCurrentWear(state.currentWear),
+      setTargets: sanitizeSetTargets(state.setTargets)
     };
   }
 
@@ -2162,16 +2162,16 @@
   }
   function closeDetailModal(){ detailModal.classList.remove('show'); }
 
-  function renderTable(highlightMap = {}){
+  function renderTable(){
     bodyRows.innerHTML = SUITS.map((_, suitIndex) => {
       const disabled = !!state.disabledSuits[suitIndex];
       const cols = PARTS.map((__, partIndex) => {
         const lockInfo = getLockInfo(partIndex);
         const lockedChoice = lockInfo?.type === 'suit' && lockInfo.suitIndex === suitIndex;
         const use70B = lockInfo?.type === 'b70';
-        const tdClass = [use70B ? 'part70b' : '', lockedChoice ? 'locked-choice' : ''].filter(Boolean).join(' ');
+        const tdClass = (use70B ? 'part70b' : '') + (lockedChoice ? ' locked-choice' : '');
         const inv = state.inventory[suitIndex][partIndex];
-        const hasInventory = [1,2,3,4,5].some(s => (inv[s] || 0) > 0);
+        const hasInventory = (inv[1]||0) > 0 || (inv[2]||0) > 0 || (inv[3]||0) > 0 || (inv[4]||0) > 0 || (inv[5]||0) > 0;
         return `<td class="${tdClass}"><div class="cell"><input class="star-input" type="number" min="0" max="5" step="1" inputmode="numeric" value="${state.stars[suitIndex][partIndex]}" data-suit="${suitIndex}" data-part="${partIndex}"><button class="mini ${hasInventory ? 'active' : ''}" type="button" data-action="inventory" data-suit="${suitIndex}" data-part="${partIndex}" tabindex="-1">★</button></div></td>`;
       }).join('');
       const head = `<div class="suit-cell">${getSuitLabelHtml(suitIndex)}${disabled ? '<span class="suit-disabled-tag">已禁</span>' : ''}</div>`;
@@ -2354,20 +2354,6 @@
     return {plans};
   }
 
-  function buildHighlightMap(plans){
-    const map = {};
-    plans.forEach((plan, index) => {
-      const rank = index + 1;
-      plan.assignment.forEach((suitIndex, partIndex) => {
-        if(plan.fixedB70[partIndex]) return;
-        const key = `${suitIndex}-${partIndex}`;
-        if(!map[key]) map[key] = [];
-        map[key].push(rank);
-      });
-    });
-    return map;
-  }
-
   function getCurrentWearKeyForPart(partIndex){
     const curr = state.currentWear?.[partIndex] || {};
     if(curr.type === 'b70' && curr.b70Token) return `b70:${curr.b70Token}`;
@@ -2421,10 +2407,8 @@
     </div>`;
   }
 
-  function getRankLabel(rank){
-    const labels = ['第一名','第二名','第三名','第四名','第五名'];
-    return labels[rank - 1] || `第${rank}名`;
-  }
+  const RANK_LABELS = ['第一名','第二名','第三名','第四名','第五名'];
+  function getRankLabel(rank){ return RANK_LABELS[rank - 1] || `第${rank}名`; }
 
   function renderResults(plans, currentEval){
     const blocks = [];
@@ -2563,7 +2547,7 @@
       input.oninput = event => {
         const suitIndex = Number(event.target.dataset.suit);
         const partIndex = Number(event.target.dataset.part);
-        const currentIndex = getAllStarInputs().indexOf(event.target);
+        const currentIndex = suitIndex * PARTS.length + partIndex;
         const sanitized = String(event.target.value).replace(/[^\d]/g, '').slice(-1);
         if(sanitized === ''){
           state.stars[suitIndex][partIndex] = 0;
@@ -2638,23 +2622,7 @@
     helper.value = value;
     helper.readOnly = false;
     helper.setAttribute('aria-hidden', 'true');
-    helper.style.position = 'fixed';
-    helper.style.top = '16px';
-    helper.style.left = '16px';
-    helper.style.width = 'calc(100vw - 32px)';
-    helper.style.maxWidth = '420px';
-    helper.style.height = '120px';
-    helper.style.padding = '12px';
-    helper.style.border = '1px solid transparent';
-    helper.style.borderRadius = '12px';
-    helper.style.background = '#fff';
-    helper.style.color = 'transparent';
-    helper.style.caretColor = 'transparent';
-    helper.style.opacity = '0.01';
-    helper.style.zIndex = '99999';
-    helper.style.pointerEvents = 'none';
-    helper.style.whiteSpace = 'pre';
-    helper.style.fontSize = '16px';
+    helper.style.cssText = 'position:fixed;top:16px;left:16px;width:calc(100vw - 32px);max-width:420px;height:120px;padding:12px;border:1px solid transparent;border-radius:12px;background:#fff;color:transparent;caret-color:transparent;opacity:0.01;z-index:99999;pointer-events:none;white-space:pre;font-size:16px';
     document.body.appendChild(helper);
 
     const selection = window.getSelection ? window.getSelection() : null;
@@ -2936,10 +2904,8 @@
     const floatingTable = floatingTableScroll.querySelector('table');
     if(!mainTable || !floatingTable) return;
     const wrapRect = tableWrap.getBoundingClientRect();
-    floatingTableHead.style.left = `${Math.max(0, wrapRect.left)}px`;
-    floatingTableHead.style.width = `${Math.max(0, wrapRect.width)}px`;
-    floatingTable.style.width = `${mainTable.scrollWidth}px`;
-    floatingTable.style.minWidth = `${mainTable.scrollWidth}px`;
+    floatingTableHead.style.cssText = `left:${Math.max(0, wrapRect.left)}px;width:${Math.max(0, wrapRect.width)}px`;
+    floatingTable.style.cssText = `width:${mainTable.scrollWidth}px;min-width:${mainTable.scrollWidth}px`;
     floatingTableScroll.scrollLeft = tableWrap.scrollLeft;
   }
   function updateFloatingHeaderVisibility(){
