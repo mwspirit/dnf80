@@ -627,6 +627,7 @@
   let recognitionBusy = false;
   let recognitionNameWorkerPromise = null;
   let recognitionNameWorkerPsm = null;
+  let saveStateTimer = null;
   let state = loadState();
   let cacheSlotState = loadCacheSlots();
   let cacheSlotNames = loadCacheSlotNames();
@@ -1464,7 +1465,12 @@
     return canvas;
   }
   async function tryRecognizeSuitNames(canvas, peaks){
-    if(!window.Tesseract || !Array.isArray(peaks) || !peaks.length) return [];
+    if(!Array.isArray(peaks) || !peaks.length) return [];
+    if(!window.Tesseract){
+      setRecognitionProgress('星级识别完成；OCR 名称组件加载失败，请手动选择套装名称。', true);
+      showToast('OCR 名称组件加载失败，请手动选择套装名称。', 'error');
+      return [];
+    }
     const worker = await getRecognitionNameWorker();
     const rowStates = peaks.map((_, index) => createRecognitionNameRowState(index));
     const fastAttempts = getRecognitionFastAttempts();
@@ -1520,7 +1526,10 @@
       let ocrResults = [];
       try {
         ocrResults = await tryRecognizeSuitNames(canvas, peaks);
-      } catch {}
+      } catch {
+        setRecognitionProgress('星级识别完成；套装名称 OCR 失败，请手动选择套装名称。', true);
+        showToast('套装名称 OCR 失败，请手动选择套装名称。', 'error');
+      }
       let autoSelectedCount = 0;
       if(ocrResults.length){
         recognitionRows.forEach((row, index) => {
@@ -1624,6 +1633,13 @@
     setStatus(message || '输入已更新。修改后不会自动计算，请点击“计算”。', false, silent);
     renderResultCalcPrompt();
     updateFloatingHeaderVisibility();
+  }
+  function markDirtyLight(message, silent = false){
+    lastComputedPlans = [];
+    openSetTargetMenu = '';
+    resultsBox.innerHTML = '';
+    setStatus(message || '输入已更新。修改后不会自动计算，请点击“计算”。', false, silent);
+    renderResultCalcPrompt();
   }
 
   function getSelectorDisplayText(type){
@@ -1768,7 +1784,18 @@
   }
   function sanitizeCurrentScore(v){ if(v === '' || v === null || v === undefined) return ''; return String(clampInt(v, 0, 999999999)); }
   function saveState(){
+    if(saveStateTimer){
+      clearTimeout(saveStateTimer);
+      saveStateTimer = null;
+    }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+  function scheduleSaveState(){
+    if(saveStateTimer) clearTimeout(saveStateTimer);
+    saveStateTimer = setTimeout(() => {
+      saveStateTimer = null;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }, 300);
   }
   function defaultCacheSlots(){ return Array.from({length:CACHE_SLOT_COUNT}, () => null); }
   function sanitizeStateSnapshot(raw){
@@ -2011,20 +2038,27 @@
         markDirty('当前穿戴星级已更新，请点击“计算”。');
       };
     });
-    currentScoreInput.oninput = event => {
-      const cleaned = String(event.target.value).replace(/[^\d]/g, '');
-      state.currentScore = cleaned === '' ? '' : String(clampInt(cleaned, 0, 999999999));
-      event.target.value = state.currentScore;
-      saveState();
-      markDirty('当前抗魔值已更新，请点击“计算”。');
-    };
     const evalResult = evaluateCurrentWear();
+    renderCurrentSummary(evalResult);
+    bindCurrentScoreInput();
+    return evalResult;
+  }
+  function renderCurrentSummary(evalResult = evaluateCurrentWear()){
     currentSummary.innerHTML = [
       `<div class="summary-card"><div class="summary-label">角色当前抗魔</div><div class="summary-value">${state.currentScore === '' ? '-' : Number(state.currentScore).toLocaleString()}</div></div>`,
       `<div class="summary-card"><div class="summary-label summary-label-inline">当前装备奖励抗魔<button type="button" class="hint-btn" data-detail-type="current-bonus">明细</button></div><div class="summary-value">${evalResult.total.toLocaleString()}</div></div>`,
       `<div class="summary-card"><div class="summary-label">非装备抗魔</div><div class="summary-value">${evalResult.nonEquipDisplay}</div></div>`
     ].join('');
-    return evalResult;
+  }
+  function bindCurrentScoreInput(){
+    currentScoreInput.oninput = event => {
+      const cleaned = String(event.target.value).replace(/[^\d]/g, '');
+      state.currentScore = cleaned === '' ? '' : String(clampInt(cleaned, 0, 999999999));
+      event.target.value = state.currentScore;
+      scheduleSaveState();
+      renderCurrentSummary();
+      markDirtyLight('当前抗魔值已更新，请点击“计算”。');
+    };
   }
 
   function evaluateCurrentWear(){
@@ -2534,15 +2568,15 @@
         if(sanitized === ''){
           state.stars[suitIndex][partIndex] = 0;
           event.target.value = '';
-          saveState();
-          markDirty('', true);
+          scheduleSaveState();
+          markDirtyLight('', true);
           return;
         }
         const value = clampInt(sanitized, 0, 5);
         state.stars[suitIndex][partIndex] = value;
         event.target.value = value;
-        saveState();
-        markDirty('', true);
+        scheduleSaveState();
+        markDirtyLight('', true);
         if(currentIndex >= 0) setTimeout(() => focusStarInputByIndex(currentIndex + 1), 0);
       };
       input.onkeydown = event => {
@@ -2713,28 +2747,30 @@
         </div>
       </div>`;
     }).join('');
-    cacheSlots.querySelectorAll('[data-cache-action]').forEach(button => {
-      button.addEventListener('click', () => {
-        const slotIndex = Number(button.dataset.slot);
-        const action = button.dataset.cacheAction;
-        if(action === 'save') saveToCacheSlot(slotIndex);
-        if(action === 'load') loadFromCacheSlot(slotIndex);
-        if(action === 'delete') deleteCacheSlot(slotIndex);
-      });
+  }
+  function bindCacheSlotEvents(){
+    cacheSlots.addEventListener('click', event => {
+      const button = event.target.closest('[data-cache-action]');
+      if(!button || !cacheSlots.contains(button)) return;
+      const slotIndex = Number(button.dataset.slot);
+      const action = button.dataset.cacheAction;
+      if(action === 'save') saveToCacheSlot(slotIndex);
+      if(action === 'load') loadFromCacheSlot(slotIndex);
+      if(action === 'delete') deleteCacheSlot(slotIndex);
     });
-    cacheSlots.querySelectorAll('[data-cache-name-input]').forEach(input => {
+    cacheSlots.addEventListener('change', event => {
+      const input = event.target.closest('[data-cache-name-input]');
+      if(!input || !cacheSlots.contains(input)) return;
       const slotIndex = Number(input.dataset.cacheNameInput);
-      input.addEventListener('change', () => {
-        updateCacheSlotName(slotIndex, input.value);
-        const nextValue = sanitizeCacheSlotName(cacheSlotNames[slotIndex]) || getCacheSlotDisplayName(slotIndex);
-        if(input.value !== nextValue) input.value = nextValue;
-      });
-      input.addEventListener('keydown', event => {
-        if(event.key === 'Enter'){
-          event.preventDefault();
-          input.blur();
-        }
-      });
+      updateCacheSlotName(slotIndex, input.value);
+      const nextValue = sanitizeCacheSlotName(cacheSlotNames[slotIndex]) || getCacheSlotDisplayName(slotIndex);
+      if(input.value !== nextValue) input.value = nextValue;
+    });
+    cacheSlots.addEventListener('keydown', event => {
+      const input = event.target.closest('[data-cache-name-input]');
+      if(!input || !cacheSlots.contains(input) || event.key !== 'Enter') return;
+      event.preventDefault();
+      input.blur();
     });
   }
   function openCacheModal(){
@@ -2937,6 +2973,7 @@
     window.addEventListener('scroll', updateFloatingHeaderVisibility, {passive:true});
     window.addEventListener('resize', updateFloatingHeaderVisibility, {passive:true});
     window.addEventListener('orientationchange', updateFloatingHeaderVisibility, {passive:true});
+    window.addEventListener('beforeunload', saveState);
   }
 
   function computeAndRender(switchToResults = false){
@@ -3078,6 +3115,7 @@
     exportCopyBtn.addEventListener('click', copyExportText);
     exportCloseBtn.addEventListener('click', closeExportModal);
     cacheCloseBtn.addEventListener('click', closeCacheModal);
+    bindCacheSlotEvents();
     planCacheCancelBtn?.addEventListener('click', closePlanCacheModal);
     detailCloseBtn.addEventListener('click', closeDetailModal);
     inventoryModal.addEventListener('click', event => { if(event.target === inventoryModal) closeInventoryModal(); });
