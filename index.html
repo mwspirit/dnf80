@@ -583,7 +583,6 @@
   const recognitionModal = document.getElementById('recognitionModal');
   const recognitionFileInput = document.getElementById('recognitionFileInput');
   const recognitionPasteZone = document.getElementById('recognitionPasteZone');
-  const recognitionThumbBox = document.getElementById('recognitionThumbBox');
   const recognitionProgress = document.getElementById('recognitionProgress');
   const recognitionGrid = document.getElementById('recognitionGrid');
   const recognitionPreview = document.getElementById('recognitionPreview');
@@ -627,6 +626,7 @@
   let recognitionBusy = false;
   let recognitionNameWorkerPromise = null;
   let recognitionNameWorkerPsm = null;
+  let recognitionNameWorkerInstance = null;
   let saveStateTimer = null;
   let state = loadState();
   let cacheSlotState = loadCacheSlots();
@@ -659,6 +659,14 @@
     return {min2, min5, min8};
   }
   function popcount(mask){ let count = 0; let value = mask >>> 0; while(value){ value &= value - 1; count++; } return count; }
+  const POPCOUNT_BY_MASK = Array.from({length: 1 << PARTS.length}, (_, mask) => popcount(mask));
+  const PARTS_BY_MASK = Array.from({length: 1 << PARTS.length}, (_, mask) => {
+    const parts = [];
+    for(let partIndex = 0; partIndex < PARTS.length; partIndex++){
+      if((mask >> partIndex) & 1) parts.push(partIndex);
+    }
+    return parts;
+  });
 
   let toastSeq = 0;
   const toastTimers = new Map();
@@ -816,6 +824,7 @@
   function closeRecognitionModal(){
     recognitionModal?.classList.remove('show');
     cleanupRecognitionPreviewImage();
+    if(!recognitionBusy) terminateRecognitionNameWorker();
   }
   function sanitizeRecognitionDigits(value){
     return String(value ?? '').replace(/[^0-5]/g, '').slice(0, 11);
@@ -983,9 +992,6 @@
       scoreEntries: result.scoreEntries
     };
   }
-  function estimateSuitNameFromText(rawText){
-    return estimateSuitNameCandidate(rawText).suitIndex;
-  }
   function createRecognitionNameRowState(index){
     return {
       index,
@@ -1116,14 +1122,25 @@
           tessedit_char_blacklist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz（）()：:当前套装抗*×xX+-_./[]{}|<>'
         });
         recognitionNameWorkerPsm = null;
+        recognitionNameWorkerInstance = worker;
         return worker;
       })().catch(error => {
         recognitionNameWorkerPromise = null;
         recognitionNameWorkerPsm = null;
+        recognitionNameWorkerInstance = null;
         throw error;
       });
     }
     return recognitionNameWorkerPromise;
+  }
+  async function terminateRecognitionNameWorker(){
+    const worker = recognitionNameWorkerInstance;
+    recognitionNameWorkerPromise = null;
+    recognitionNameWorkerPsm = null;
+    recognitionNameWorkerInstance = null;
+    if(worker && typeof worker.terminate === 'function'){
+      try { await worker.terminate(); } catch {}
+    }
   }
   async function runRecognitionNameOcr(worker, image, psm){
     if(!worker) return {text:'', confidence:0};
@@ -1161,31 +1178,6 @@
         } catch {}
       }
     }
-  }
-  function applyRecognitionAssignmentsToRows(rowStates, rows){
-    let autoSelectedCount = 0;
-    rowStates.forEach((rowState, index) => {
-      const assignedSuitIndex = shouldAutoSelectRecognitionAssignment(rowState) ? rowState.assignedSuitIndex : null;
-      rows[index].ocrText = rowState.bestDisplay || rowState.bestCompact || '';
-      rows[index].ocrTextDisplay = rowState.bestDisplay || rowState.bestCompact || '';
-      rows[index].suitIndex = assignedSuitIndex;
-      if(assignedSuitIndex !== null) autoSelectedCount++;
-    });
-    return autoSelectedCount;
-  }
-  function createHeaderPreview(canvas, peakY, scale){
-    return createHeaderCanvas(canvas, peakY, scale).toDataURL('image/png');
-  }
-  function createHeaderCanvas(canvas, peakY, scale){
-    const sx = 10 * scale;
-    const sy = Math.max(0, peakY - 58 * scale);
-    const sw = 280 * scale;
-    const sh = 78 * scale;
-    const temp = document.createElement('canvas');
-    temp.width = Math.max(1, Math.round(sw));
-    temp.height = Math.max(1, Math.round(sh));
-    temp.getContext('2d').drawImage(canvas, sx, sy, sw, sh, 0, 0, temp.width, temp.height);
-    return temp;
   }
   function createSuitNameCanvas(canvas, peakY, scale, variant = 0){
     // peakY 对应的是每套标题下方那条横向进度线的位置。
@@ -1313,8 +1305,12 @@
       }
       return count ? sum / count : 0;
     });
-    const maxScore = Math.max(...smooth);
-    const minScore = Math.min(...smooth);
+    let maxScore = Number.NEGATIVE_INFINITY;
+    let minScore = Number.POSITIVE_INFINITY;
+    for(const value of smooth){
+      if(value > maxScore) maxScore = value;
+      if(value < minScore) minScore = value;
+    }
     const threshold = minScore + (maxScore - minScore) * 0.55;
     const minDistance = Math.max(68, Math.min(140, Math.round(height / 24)));
     let peaks = collectRecognitionPeaks(smooth, threshold, minDistance);
@@ -1465,11 +1461,11 @@
     return canvas;
   }
   async function tryRecognizeSuitNames(canvas, peaks){
-    if(!Array.isArray(peaks) || !peaks.length) return [];
+    if(!Array.isArray(peaks) || !peaks.length) return {results:[], ocrAvailable:false};
     if(!window.Tesseract){
       setRecognitionProgress('星级识别完成；OCR 名称组件加载失败，请手动选择套装名称。', true);
       showToast('OCR 名称组件加载失败，请手动选择套装名称。', 'error');
-      return [];
+      return {results:[], ocrAvailable:false};
     }
     const worker = await getRecognitionNameWorker();
     const rowStates = peaks.map((_, index) => createRecognitionNameRowState(index));
@@ -1484,12 +1480,15 @@
       await runRecognitionNameAttemptBatch(worker, canvas, peaks, rowStates, fallbackRows, fallbackAttempts, '精细匹配', progressRef, totalFastSteps + fallbackRows.length * fallbackAttempts.length);
       assignRecognitionSuitNames(rowStates);
     }
-    return rowStates.map(rowState => ({
-      text: rowState.bestDisplay || rowState.bestCompact || '',
-      suitIndex: shouldAutoSelectRecognitionAssignment(rowState) ? rowState.assignedSuitIndex : null,
-      assignedScore: rowState.assignedScore,
-      assignedMargin: rowState.assignedMargin
-    }));
+    return {
+      results: rowStates.map(rowState => ({
+        text: rowState.bestDisplay || rowState.bestCompact || '',
+        suitIndex: shouldAutoSelectRecognitionAssignment(rowState) ? rowState.assignedSuitIndex : null,
+        assignedScore: rowState.assignedScore,
+        assignedMargin: rowState.assignedMargin
+      })),
+      ocrAvailable:true
+    };
   }
   async function startRecognition(){
     if(recognitionBusy) return;
@@ -1524,9 +1523,13 @@
       renderRecognitionRows();
       setRecognitionPreview(`星级识别完成，共 ${recognitionRows.length} 套。左侧显示的是当前裁切到的标题原文；若下拉框已自动选中正确套装，直接确认导入即可。`);
       let ocrResults = [];
+      let ocrAvailable = true;
       try {
-        ocrResults = await tryRecognizeSuitNames(canvas, peaks);
+        const ocrOutcome = await tryRecognizeSuitNames(canvas, peaks);
+        ocrResults = ocrOutcome.results || [];
+        ocrAvailable = !!ocrOutcome.ocrAvailable;
       } catch {
+        ocrAvailable = false;
         setRecognitionProgress('星级识别完成；套装名称 OCR 失败，请手动选择套装名称。', true);
         showToast('套装名称 OCR 失败，请手动选择套装名称。', 'error');
       }
@@ -1540,9 +1543,14 @@
         });
         renderRecognitionRows();
       }
-      setRecognitionProgress('识别完成。已尽量自动匹配套装名称。');
-      setRecognitionPreview(`星级识别完成，共 ${recognitionRows.length} 套；套装名称已自动选中 ${autoSelectedCount} 套。若有未选中的行，请手动修正后再导入。`);
-      showToast('图片识别完成，请检查后再确认导入。', 'ok');
+      if(ocrAvailable){
+        setRecognitionProgress('识别完成。已尽量自动匹配套装名称。');
+        setRecognitionPreview(`星级识别完成，共 ${recognitionRows.length} 套；套装名称已自动选中 ${autoSelectedCount} 套。若有未选中的行，请手动修正后再导入。`);
+      }else{
+        setRecognitionProgress('星级识别完成；套装名称需要手动选择。', true);
+        setRecognitionPreview(`星级识别完成，共 ${recognitionRows.length} 套；套装名称 OCR 不可用，请逐行手动选择后再导入。`, true);
+      }
+      showToast('图片识别完成，请检查后再确认导入。', 'success');
     } catch (error){
       const message = error?.message || '图片识别失败。';
       recognitionRows = [];
@@ -1554,6 +1562,7 @@
       recognitionBusy = false;
       if(recognitionStartBtn) recognitionStartBtn.disabled = false;
       if(recognitionConfirm) recognitionConfirm.disabled = false;
+      if(!recognitionModal?.classList.contains('show')) terminateRecognitionNameWorker();
     }
   }
   function confirmRecognitionImport(){
@@ -1599,7 +1608,7 @@
     saveState();
     closeRecognitionModal();
     markDirty('图片识别结果已导入到主表，请点击“计算”。');
-    showToast('图片识别结果已导入。', 'ok');
+    showToast('图片识别结果已导入。', 'success');
   }
 
   function switchTab(tab){
@@ -1627,9 +1636,8 @@
     renderLockBar();
     renderCurrentPanel();
     renderSetTargetBar();
-    renderTable({});
+    renderTable();
     resultsBox.innerHTML = '';
-    bindDynamicEvents();
     setStatus(message || '输入已更新。修改后不会自动计算，请点击“计算”。', false, silent);
     renderResultCalcPrompt();
     updateFloatingHeaderVisibility();
@@ -2044,11 +2052,10 @@
     return evalResult;
   }
   function renderCurrentSummary(evalResult = evaluateCurrentWear()){
-    currentSummary.innerHTML = [
-      `<div class="summary-card"><div class="summary-label">角色当前抗魔</div><div class="summary-value">${state.currentScore === '' ? '-' : Number(state.currentScore).toLocaleString()}</div></div>`,
-      `<div class="summary-card"><div class="summary-label summary-label-inline">当前装备奖励抗魔<button type="button" class="hint-btn" data-detail-type="current-bonus">明细</button></div><div class="summary-value">${evalResult.total.toLocaleString()}</div></div>`,
-      `<div class="summary-card"><div class="summary-label">非装备抗魔</div><div class="summary-value">${evalResult.nonEquipDisplay}</div></div>`
-    ].join('');
+    currentSummary.innerHTML =
+      `<div class="summary-card"><div class="summary-label">角色当前抗魔</div><div class="summary-value">${state.currentScore === '' ? '-' : Number(state.currentScore).toLocaleString()}</div></div>` +
+      `<div class="summary-card"><div class="summary-label summary-label-inline">当前装备奖励抗魔<button type="button" class="hint-btn" data-detail-type="current-bonus">明细</button></div><div class="summary-value">${evalResult.total.toLocaleString()}</div></div>` +
+      `<div class="summary-card"><div class="summary-label">非装备抗魔</div><div class="summary-value">${evalResult.nonEquipDisplay}</div></div>`;
   }
   function bindCurrentScoreInput(){
     currentScoreInput.oninput = event => {
@@ -2214,10 +2221,10 @@
       subsetScores[suitIndex][0] = minRequired === 0 ? 0 : Number.NEGATIVE_INFINITY;
       for(let submask = remainingMask; ; submask = (submask - 1) & remainingMask){
         if(submask !== 0){
-          const pieceCount = popcount(submask);
+          const pieceCount = POPCOUNT_BY_MASK[submask];
           if(pieceCount >= minRequired && !(disabled && pieceCount > 1)){
             let base = 0; let feasible = true; const stars = [];
-            for(let partIndex = 0; partIndex < PARTS.length; partIndex++) if((submask >> partIndex) & 1){
+            for(const partIndex of PARTS_BY_MASK[submask]){
               if(!allowed[suitIndex][partIndex]){ feasible = false; break; }
               const star = state.stars[suitIndex][partIndex];
               base += getPartScore(partIndex, star);
@@ -2289,11 +2296,11 @@
     const allowedResult = buildAllowedMatrix();
     if(allowedResult.error) return {error: allowedResult.error};
     const {allowed, fixedB70} = allowedResult;
-    let fixedBase = 0; let fixedMask = 0;
-    for(const option of B70_OPTIONS){ if(fixedB70[option.partIndex]){ fixedBase += option.score; fixedMask |= (1 << option.partIndex); } }
+    let fixedMask = 0;
+    for(const option of B70_OPTIONS){ if(fixedB70[option.partIndex]) fixedMask |= (1 << option.partIndex); }
     const remainingMask = FULL_MASK ^ fixedMask;
     const requiredCounts = getRequiredCountBySuit();
-    const availableSlots = popcount(remainingMask);
+    const availableSlots = POPCOUNT_BY_MASK[remainingMask];
     const requiredTotal = requiredCounts.reduce((sum, value) => sum + value, 0);
     if(requiredTotal > availableSlots){
       return {error:`当前至少N件条件与固定穿戴冲突：最少需要 ${requiredTotal} 件，但当前可分配部位只有 ${availableSlots} 件。`};
@@ -2408,16 +2415,15 @@
   }
 
   const RANK_LABELS = ['第一名','第二名','第三名','第四名','第五名'];
+  const STAR_LEVELS = [1,2,3,4,5];
   function getRankLabel(rank){ return RANK_LABELS[rank - 1] || `第${rank}名`; }
 
   function renderResults(plans, currentEval){
-    const blocks = [];
-    plans.forEach((plan, index) => {
+    resultsBox.innerHTML = plans.map((plan, index) => {
       const rank = index + 1;
       const label = getRankLabel(rank);
-      blocks.push(`<details class="rank-card rank${rank}" open><summary><span class="summary-main">${label}：总抗魔 ${plan.totalScore.toLocaleString()}</span><span class="summary-right">点击展开</span></summary><div class="rank-body">${renderPlanRow(plan, currentEval, index)}</div></details>`);
-    });
-    resultsBox.innerHTML = blocks.join('');
+      return `<details class="rank-card rank${rank}" open><summary><span class="summary-main">${label}：总抗魔 ${plan.totalScore.toLocaleString()}</span><span class="summary-right">点击展开</span></summary><div class="rank-body">${renderPlanRow(plan, currentEval, index)}</div></details>`;
+    }).join('');
   }
 
   function buildCurrentWearFromPlan(plan){
@@ -2427,7 +2433,7 @@
         return {type:'b70', suitIndex:null, b70Token:option?.token || '', star:0};
       }
       const suitIndex = plan.assignment[partIndex];
-      const star = suitIndex >= 0 ? clampInt(state.stars?.[suitIndex]?.[partIndex] ?? 0, 0, 5) : 0;
+      const star = suitIndex >= 0 ? state.stars[suitIndex][partIndex] : 0;
       return {type:'suit', suitIndex, b70Token:'', star};
     });
   }
@@ -2529,51 +2535,58 @@
 
   function getAllStarInputs(){ return Array.from(document.querySelectorAll('.star-input')); }
   function focusStarInputByIndex(targetIndex){
-    const inputs = getAllStarInputs();
-    if(!inputs.length) return;
-    const safeIndex = ((targetIndex % inputs.length) + inputs.length) % inputs.length;
-    const nextInput = inputs[safeIndex];
+    const total = SUITS.length * PARTS.length;
+    const safeIndex = ((targetIndex % total) + total) % total;
+    const suitIndex = Math.floor(safeIndex / PARTS.length);
+    const partIndex = safeIndex % PARTS.length;
+    const nextInput = bodyRows.querySelector(`[data-suit="${suitIndex}"][data-part="${partIndex}"]`);
     if(nextInput){ nextInput.focus(); nextInput.select(); }
   }
   function focusNextStarInput(currentInput, reverse = false){
-    const inputs = getAllStarInputs();
-    const currentIndex = inputs.indexOf(currentInput);
-    if(currentIndex < 0) return;
-    const delta = reverse ? -1 : 1;
-    focusStarInputByIndex(currentIndex + delta);
+    const suitIndex = Number(currentInput.dataset.suit);
+    const partIndex = Number(currentInput.dataset.part);
+    focusStarInputByIndex(suitIndex * PARTS.length + partIndex + (reverse ? -1 : 1));
   }
-  function bindDynamicEvents(){
-    document.querySelectorAll('.star-input').forEach(input => {
-      input.oninput = event => {
-        const suitIndex = Number(event.target.dataset.suit);
-        const partIndex = Number(event.target.dataset.part);
-        const currentIndex = suitIndex * PARTS.length + partIndex;
-        const sanitized = String(event.target.value).replace(/[^\d]/g, '').slice(-1);
-        if(sanitized === ''){
-          state.stars[suitIndex][partIndex] = 0;
-          event.target.value = '';
-          scheduleSaveState();
-          markDirtyLight('', true);
-          return;
-        }
-        const value = clampInt(sanitized, 0, 5);
-        state.stars[suitIndex][partIndex] = value;
-        event.target.value = value;
-        scheduleSaveState();
-        markDirtyLight('', true);
-        if(currentIndex >= 0) setTimeout(() => focusStarInputByIndex(currentIndex + 1), 0);
-      };
-      input.onkeydown = event => {
-        if(event.key === 'Tab'){
-          event.preventDefault();
-          focusNextStarInput(event.target, event.shiftKey);
-        }
-        if(event.key === 'ArrowUp' || event.key === 'ArrowDown') event.preventDefault();
-      };
-      input.onfocus = event => event.target.select();
+  function handleStarInput(event){
+    const input = event.target.closest('.star-input');
+    if(!input || !bodyRows.contains(input)) return;
+    const suitIndex = Number(input.dataset.suit);
+    const partIndex = Number(input.dataset.part);
+    const currentIndex = suitIndex * PARTS.length + partIndex;
+    const sanitized = String(input.value).replace(/[^\d]/g, '').slice(-1);
+    if(sanitized === ''){
+      state.stars[suitIndex][partIndex] = 0;
+      input.value = '';
+      scheduleSaveState();
+      markDirtyLight('', true);
+      return;
+    }
+    const value = clampInt(sanitized, 0, 5);
+    state.stars[suitIndex][partIndex] = value;
+    input.value = value;
+    scheduleSaveState();
+    markDirtyLight('', true);
+    setTimeout(() => focusStarInputByIndex(currentIndex + 1), 0);
+  }
+  function bindTableEvents(){
+    bodyRows.addEventListener('input', handleStarInput);
+    bodyRows.addEventListener('keydown', event => {
+      const input = event.target.closest('.star-input');
+      if(!input || !bodyRows.contains(input)) return;
+      if(event.key === 'Tab'){
+        event.preventDefault();
+        focusNextStarInput(input, event.shiftKey);
+      }
+      if(event.key === 'ArrowUp' || event.key === 'ArrowDown') event.preventDefault();
     });
-    document.querySelectorAll('[data-action="inventory"]').forEach(btn => {
-      btn.onclick = event => openInventoryModal(Number(event.currentTarget.dataset.suit), Number(event.currentTarget.dataset.part));
+    bodyRows.addEventListener('focusin', event => {
+      const input = event.target.closest('.star-input');
+      if(input && bodyRows.contains(input)) input.select();
+    });
+    bodyRows.addEventListener('click', event => {
+      const btn = event.target.closest('[data-action="inventory"]');
+      if(!btn || !bodyRows.contains(btn)) return;
+      openInventoryModal(Number(btn.dataset.suit), Number(btn.dataset.part));
     });
   }
 
@@ -2689,15 +2702,6 @@
     const pad = n => String(n).padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
   }
-  function countFilledCells(matrix){
-    return matrix.reduce((total, row) => total + row.filter(v => Number(v) > 0).length, 0);
-  }
-  function countLockSelections(locks){
-    return Array.isArray(locks) ? locks.filter(Boolean).length : 0;
-  }
-  function countCurrentWearSelections(currentWear){
-    return Array.isArray(currentWear) ? currentWear.filter(item => item && item.type).length : 0;
-  }
   function renderCacheSlots(){
     cacheSlots.innerHTML = cacheSlotState.map((entry, index) => {
       const displayName = getCacheSlotDisplayName(index);
@@ -2719,7 +2723,7 @@
   function bindCacheSlotEvents(){
     cacheSlots.addEventListener('click', event => {
       const button = event.target.closest('[data-cache-action]');
-      if(!button || !cacheSlots.contains(button)) return;
+      if(!button) return;
       const slotIndex = Number(button.dataset.slot);
       const action = button.dataset.cacheAction;
       if(action === 'save') saveToCacheSlot(slotIndex);
@@ -2728,7 +2732,7 @@
     });
     cacheSlots.addEventListener('change', event => {
       const input = event.target.closest('[data-cache-name-input]');
-      if(!input || !cacheSlots.contains(input)) return;
+      if(!input) return;
       const slotIndex = Number(input.dataset.cacheNameInput);
       updateCacheSlotName(slotIndex, input.value);
       const nextValue = sanitizeCacheSlotName(cacheSlotNames[slotIndex]) || getCacheSlotDisplayName(slotIndex);
@@ -2875,7 +2879,7 @@
     inventoryEditing = {suitIndex, partIndex};
     const current = state.inventory[suitIndex][partIndex];
     modalTitle.textContent = `库存录入：${SUIT_LABELS[suitIndex]}｜${PARTS[partIndex]}`;
-    modalGrid.innerHTML = [1,2,3,4,5].map(star => `<div class="inv-item"><label>${star}星数量</label><input class="inv-input" type="number" min="0" step="1" inputmode="numeric" value="${current[star] || 0}" data-star="${star}"></div>`).join('');
+    modalGrid.innerHTML = STAR_LEVELS.map(star => `<div class="inv-item"><label>${star}星数量</label><input class="inv-input" type="number" min="0" step="1" inputmode="numeric" value="${current[star] || 0}" data-star="${star}"></div>`).join('');
     modalGrid.querySelectorAll('[data-star]').forEach(input => {
       input.oninput = refreshModalPreview;
       input.onkeydown = event => {
@@ -2939,7 +2943,10 @@
     window.addEventListener('scroll', updateFloatingHeaderVisibility, {passive:true});
     window.addEventListener('resize', updateFloatingHeaderVisibility, {passive:true});
     window.addEventListener('orientationchange', updateFloatingHeaderVisibility, {passive:true});
-    window.addEventListener('beforeunload', saveState);
+    window.addEventListener('beforeunload', () => {
+      saveState();
+      terminateRecognitionNameWorker();
+    });
   }
 
   function computeAndRender(switchToResults = false){
@@ -2953,8 +2960,7 @@
     if(result.error){
       lastComputedPlans = [];
       resultsBox.innerHTML = '';
-      renderTable({});
-      bindDynamicEvents();
+      renderTable();
       updateFloatingHeaderVisibility();
       setStatus(result.error, true);
       setResultStatus(result.error, true);
@@ -2967,8 +2973,7 @@
     }
     lastComputedPlans = plans;
     renderResults(plans, currentEval);
-    renderTable({});
-    bindDynamicEvents();
+    renderTable();
     updateFloatingHeaderVisibility();
     setStatus('计算完成。当前结果已更新。');
     setResultStatus(`Top${plans.length} 结果已更新。`);
@@ -3117,12 +3122,12 @@
   applyDesktopDefaultExpandedGroups();
   bindStaticEvents();
   bindFloatingHeaderEvents();
+  bindTableEvents();
   renderHead();
   renderLockBar();
   renderCurrentPanel();
   renderSetTargetBar();
-  renderTable({});
-  bindDynamicEvents();
+  renderTable();
   renderResultCalcPrompt();
   updateFloatingHeaderVisibility();
 })();
