@@ -507,9 +507,9 @@
 
   <div class="toast-wrap" id="toastWrap"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 (() => {
+  const TESSERACT_SCRIPT_SRC = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
   const SUITS = ['万灵','永恒','残夜','复苏','冰川','纵横','凌云','星辰','万世','天劫','暗夜','时光','逝魔','铁马','上元'];
   const SUIT_LABELS = SUITS.map(s => s.slice(0, 2));
   const SUIT_NAME_CLASS = Object.fromEntries(SUITS.map((name, index) => [index, ({'万灵':'suit-green','星辰':'suit-green','天劫':'suit-green','暗夜':'suit-red','逝魔':'suit-red'})[name] || '']));
@@ -627,6 +627,7 @@
   let recognitionNameWorkerPromise = null;
   let recognitionNameWorkerPsm = null;
   let recognitionNameWorkerInstance = null;
+  let tesseractScriptPromise = null;
   let saveStateTimer = null;
   let state = loadState();
   let cacheSlotState = loadCacheSlots();
@@ -872,17 +873,20 @@
         <input class="recognition-code-input" type="text" value="${escapeHtml(getRecognitionEditableDigitsString(row))}" data-recognition-digits="${index}">
       </div>
     `}).join('');
-    recognitionGrid.querySelectorAll('[data-recognition-suit]').forEach(select => {
-      select.addEventListener('change', event => {
-        const index = Number(event.target.dataset.recognitionSuit);
-        recognitionRows[index].suitIndex = toSuitIndex(event.target.value);
-      });
+  }
+  function bindRecognitionRowsEvents(){
+    if(!recognitionGrid) return;
+    recognitionGrid.addEventListener('change', event => {
+      const select = event.target.closest('[data-recognition-suit]');
+      if(!select || !recognitionGrid.contains(select)) return;
+      const index = Number(select.dataset.recognitionSuit);
+      if(recognitionRows[index]) recognitionRows[index].suitIndex = toSuitIndex(select.value);
     });
-    recognitionGrid.querySelectorAll('[data-recognition-digits]').forEach(input => {
-      input.addEventListener('input', event => {
-        const index = Number(event.target.dataset.recognitionDigits);
-        recognitionRows[index].digitsTextRaw = event.target.value;
-      });
+    recognitionGrid.addEventListener('input', event => {
+      const input = event.target.closest('[data-recognition-digits]');
+      if(!input || !recognitionGrid.contains(input)) return;
+      const index = Number(input.dataset.recognitionDigits);
+      if(recognitionRows[index]) recognitionRows[index].digitsTextRaw = input.value;
     });
   }
   function normalizeRecognitionText(rawText){
@@ -1110,6 +1114,19 @@
       {variant:3, mode:'strong', psm:7},
       {variant:4, mode:'strong', psm:7}
     ];
+  }
+  function loadTesseractScript(){
+    if(window.Tesseract?.createWorker) return Promise.resolve(true);
+    if(tesseractScriptPromise) return tesseractScriptPromise;
+    tesseractScriptPromise = new Promise(resolve => {
+      const script = document.createElement('script');
+      script.src = TESSERACT_SCRIPT_SRC;
+      script.async = true;
+      script.onload = () => resolve(!!window.Tesseract?.createWorker);
+      script.onerror = () => resolve(false);
+      document.head.appendChild(script);
+    });
+    return tesseractScriptPromise;
   }
   async function getRecognitionNameWorker(){
     if(!window.Tesseract?.createWorker) return null;
@@ -1462,7 +1479,9 @@
   }
   async function tryRecognizeSuitNames(canvas, peaks){
     if(!Array.isArray(peaks) || !peaks.length) return {results:[], ocrAvailable:false};
-    if(!window.Tesseract){
+    setRecognitionProgress('星级识别完成，正在加载 OCR 名称组件...');
+    const tesseractReady = await loadTesseractScript();
+    if(!tesseractReady){
       setRecognitionProgress('星级识别完成；OCR 名称组件加载失败，请手动选择套装名称。', true);
       showToast('OCR 名称组件加载失败，请手动选择套装名称。', 'error');
       return {results:[], ocrAvailable:false};
@@ -2927,12 +2946,20 @@
   }
   function bindFloatingHeaderEvents(){
     let syncing = false;
+    let visibilityFrame = 0;
+    const requestFloatingHeaderUpdate = () => {
+      if(visibilityFrame) return;
+      visibilityFrame = requestAnimationFrame(() => {
+        visibilityFrame = 0;
+        updateFloatingHeaderVisibility();
+      });
+    };
     tableWrap.addEventListener('scroll', () => {
       if(syncing) return;
       syncing = true;
       floatingTableScroll.scrollLeft = tableWrap.scrollLeft;
       syncing = false;
-      updateFloatingHeaderVisibility();
+      requestFloatingHeaderUpdate();
     }, {passive:true});
     floatingTableScroll.addEventListener('scroll', () => {
       if(syncing) return;
@@ -2940,9 +2967,9 @@
       tableWrap.scrollLeft = floatingTableScroll.scrollLeft;
       syncing = false;
     }, {passive:true});
-    window.addEventListener('scroll', updateFloatingHeaderVisibility, {passive:true});
-    window.addEventListener('resize', updateFloatingHeaderVisibility, {passive:true});
-    window.addEventListener('orientationchange', updateFloatingHeaderVisibility, {passive:true});
+    window.addEventListener('scroll', requestFloatingHeaderUpdate, {passive:true});
+    window.addEventListener('resize', requestFloatingHeaderUpdate, {passive:true});
+    window.addEventListener('orientationchange', requestFloatingHeaderUpdate, {passive:true});
     window.addEventListener('beforeunload', () => {
       saveState();
       terminateRecognitionNameWorker();
@@ -2991,6 +3018,19 @@
   }
   function clearCurrent(){ state.currentScore = ''; state.currentWear = defaultCurrentWear(); saveState(); markDirty('当前装备和抗魔已清空，请点击“计算”。'); }
   function fillRandom(){ state.stars = SUITS.map(() => PARTS.map(() => Math.floor(Math.random() * 6))); state.inventory = defaultInventory(); saveState(); markDirty('已填入随机测试数据，请点击“计算”。'); }
+
+  function runInternalSelfCheck(){
+    const checks = [
+      ['bonus 2x1star', computeBonusForStars([1,1]).bonus === BONUS_TABLE[1][2]],
+      ['inventory merge', computeHighestStarFromCounts({1:4,2:0,3:0,4:0,5:0}).maxStar === 3],
+      ['recognition order roundtrip', displayDigitsToStandardDigits(standardDigitsToDisplayDigits([0,1,2,3,4,5,1,2,3,4,5])).join('') === '01234512345'],
+      ['cache slots length', defaultCacheSlots().length === CACHE_SLOT_COUNT],
+      ['popcount cache', POPCOUNT_BY_MASK[FULL_MASK] === PARTS.length]
+    ];
+    const failed = checks.filter(([, passed]) => !passed).map(([name]) => name);
+    if(failed.length) console.warn(`内部自检未通过：${failed.join('、')}`);
+    return !failed.length;
+  }
 
   function bindStaticEvents(){
     inputTabBtn.addEventListener('click', () => switchTab('input'));
@@ -3122,6 +3162,7 @@
   applyDesktopDefaultExpandedGroups();
   bindStaticEvents();
   bindFloatingHeaderEvents();
+  bindRecognitionRowsEvents();
   bindTableEvents();
   renderHead();
   renderLockBar();
@@ -3130,6 +3171,7 @@
   renderTable();
   renderResultCalcPrompt();
   updateFloatingHeaderVisibility();
+  runInternalSelfCheck();
 })();
 </script>
 </body>
