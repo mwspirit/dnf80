@@ -1860,18 +1860,17 @@
   }
   function getLockInfo(partIndex){ return state.locks[partIndex] || null; }
   function getPartScore(partIndex, star){
-    const level = clampInt(star, 0, 5);
-    if(level <= 0) return 0;
-    return SPECIAL_PARTS.has(PARTS[partIndex]) ? STAR_VALUES.special[level] : STAR_VALUES.normal[level];
+    if(star <= 0) return 0;
+    return SPECIAL_PARTS.has(PARTS[partIndex]) ? STAR_VALUES.special[star] : STAR_VALUES.normal[star];
   }
   function computeBonusForStars(stars){
     if(!stars.length) return {bonus:0, details:[]};
-    const sorted = [...stars].sort((a,b) => b - a);
+    stars.sort((a,b) => b - a);
     let total = 0;
     const details = [];
     for(const threshold of BONUS_THRESHOLDS){
-      if(sorted.length >= threshold){
-        const tierStar = sorted[threshold - 1];
+      if(stars.length >= threshold){
+        const tierStar = stars[threshold - 1];
         const bonus = BONUS_TABLE[tierStar]?.[threshold] || 0;
         total += bonus;
         details.push({threshold, tierStar, bonus});
@@ -2182,11 +2181,7 @@
       for(let submask = remainingMask; ; submask = (submask - 1) & remainingMask){
         if(submask !== 0){
           const pieceCount = popcount(submask);
-          if(pieceCount < minRequired){
-            // 不满足至少 N 件要求
-          } else if(disabled && ((submask & (submask - 1)) !== 0)){
-            // 勾选禁用后，该套装最多只能装备 1 件
-          } else {
+          if(pieceCount >= minRequired && !(disabled && pieceCount > 1)){
             let base = 0; let feasible = true; const stars = [];
             for(let partIndex = 0; partIndex < PARTS.length; partIndex++) if((submask >> partIndex) & 1){
               if(!allowed[suitIndex][partIndex]){ feasible = false; break; }
@@ -2204,13 +2199,16 @@
   }
 
   function pushTopK(arr, entry){
-    arr.push(entry);
-    arr.sort((a,b) => b.score - a.score);
+    const maxLen = TOP_K * 20;
+    if(arr.length >= maxLen && entry.score < arr[arr.length - 1].score) return;
+    let lo = 0, hi = arr.length;
+    while(lo < hi){ const mid = (lo + hi) >> 1; if(arr[mid].score >= entry.score) lo = mid + 1; else hi = mid; }
+    arr.splice(lo, 0, entry);
     if(arr.length > TOP_K){
       const kthScore = arr[TOP_K - 1].score;
       let cutoff = TOP_K;
       while(cutoff < arr.length && arr[cutoff].score === kthScore) cutoff++;
-      if(cutoff > TOP_K * 20) cutoff = TOP_K * 20;
+      if(cutoff > maxLen) cutoff = maxLen;
       arr.length = cutoff;
     }
   }
@@ -2284,25 +2282,30 @@
     const dp = Array.from({length: SUITS.length + 1}, () => Array.from({length: 1 << PARTS.length}, () => []));
     dp[0][0] = [{score: 0, prevMask: null, prevRank: null, submask: 0}];
     for(let suitIndex = 0; suitIndex < SUITS.length; suitIndex++){
-      for(let mask = 0; mask <= remainingMask; mask++){
+      for(let mask = remainingMask; ; mask = (mask - 1) & remainingMask){
         const currentEntries = dp[suitIndex][mask];
-        if(!currentEntries.length) continue;
-        const remaining = remainingMask ^ mask;
-        for(let submask = remaining; ; submask = (submask - 1) & remaining){
-          const suitScore = subsetScores[suitIndex][submask];
-          if(Number.isFinite(suitScore)){
-            const nextMask = mask | submask;
-            currentEntries.forEach((entry, rankIndex) => pushTopK(dp[suitIndex + 1][nextMask], {score: entry.score + suitScore, prevMask: mask, prevRank: rankIndex, submask}));
+        if(currentEntries.length){
+          const remaining = remainingMask ^ mask;
+          for(let submask = remaining; ; submask = (submask - 1) & remaining){
+            const suitScore = subsetScores[suitIndex][submask];
+            if(Number.isFinite(suitScore)){
+              const nextMask = mask | submask;
+              const nextArr = dp[suitIndex + 1][nextMask];
+              for(let rankIndex = 0; rankIndex < currentEntries.length; rankIndex++){
+                const entry = currentEntries[rankIndex];
+                pushTopK(nextArr, {score: entry.score + suitScore, prevMask: mask, prevRank: rankIndex, submask});
+              }
+            }
+            if(submask === 0) break;
           }
-          if(submask === 0) break;
         }
+        if(mask === 0) break;
       }
     }
     const finals = dp[SUITS.length][remainingMask];
     if(!finals.length) return {error:'当前套装件数条件下找不到满足要求的方案。'};
     const plans = finals.map((entry, idx) => {
       const plan = reconstructPlan(dp, entry, idx, fixedB70);
-      plan.totalScore += fixedBase * 0;
       let changes = 0;
       for(let partIndex = 0; partIndex < PARTS.length; partIndex++){
         const curr = state.currentWear[partIndex];
