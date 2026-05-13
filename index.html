@@ -913,17 +913,24 @@
   function normalizeRecognitionText(rawText){
     return String(rawText || '').replace(/[\s ]+/g, '').replace(/[：:·•.。,，、;；!！?？“”"'‘’()（）【】\[\]<>《》|]/g, '');
   }
+  function getSuitNamePrefix(rawText, maxLength = 5){
+    return Array.from(normalizeRecognitionText(rawText)).slice(0, maxLength).join('');
+  }
   function extractSuitNameWindow(rawText){
     const raw = String(rawText || '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
     if(!raw) return '';
     const compact = raw.replace(/\s+/g, '');
-    const stopMarkers = ['（当前','(当前','当前套装','当前','11/11','10/11','9/11','8/11','7/11','6/11','5/11'];
+    const stopMarkers = [
+      '（当前','(当前','当前套装','当前','套装抗魔','抗魔',
+      '〈削','《削','人削','削当','削前','削套','削壮','削码','削冶','削',
+      '11/11','10/11','9/11','8/11','7/11','6/11','5/11'
+    ];
     let end = compact.length;
     stopMarkers.forEach(marker => {
       const idx = compact.indexOf(marker);
       if(idx >= 0 && idx < end) end = idx;
     });
-    return compact.slice(0, end).replace(/[（(].*$/, '').trim();
+    return getSuitNamePrefix(compact.slice(0, end).replace(/[（(〈《<].*$/, '').trim());
   }
   function getCommonCharCount(a, b){
     const counts = new Map();
@@ -3087,6 +3094,9 @@
       ['ocr hint fs dragon scale', estimateSuitNameCandidate('复共龙鳞人削壮').suitIndex === 3],
       ['ocr hint lingyun tianyi', estimateSuitNameCandidate('凑云天仪人削码').suitIndex === 6],
       ['ocr hint shimo power', estimateSuitNameCandidate('白磨之力尖').suitIndex === 12],
+      ['ocr trims current marker noise', extractSuitNameWindow('复苏龙鳞人削壮12345') === '复苏龙鳞'],
+      ['ocr trims bracket marker noise', extractSuitNameWindow('凌云天仪〈削码98765') === '凌云天仪'],
+      ['ocr name window max length', extractSuitNameWindow('逝魔之力尖多余文字') === '逝魔之力尖'],
       ['cache slots length', defaultCacheSlots().length === CACHE_SLOT_COUNT],
       ['popcount cache', POPCOUNT_BY_MASK[FULL_MASK] === PARTS.length]
     ];
