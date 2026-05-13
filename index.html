@@ -519,6 +519,25 @@
   const SUIT_PINYIN_TWO = ['wl','yh','cy','fs','bc','zh','ly','xc','ws','tj','ay','sg','sm','tm','sy'];
   const SUIT_BY_TWO = Object.fromEntries(SUIT_PINYIN_TWO.map((code, i) => [code, i]));
   const SUIT_TWO_FIRST = new Set(SUIT_PINYIN_TWO.map(code => code[0]));
+  const SUIT_NAME_HINTS = {
+    3: [
+      {token:'复苏', score:100},
+      {token:'复共', score:94},
+      {token:'龙鳞', score:92}
+    ],
+    6: [
+      {token:'凌云', score:100},
+      {token:'凑云', score:94},
+      {token:'天仪', score:92}
+    ],
+    12: [
+      {token:'逝魔', score:100},
+      {token:'逝磨', score:96},
+      {token:'逝麻', score:96},
+      {token:'白磨', score:94},
+      {token:'之力', score:90}
+    ]
+  };
   const SPECIAL_PARTS = new Set(['胸', '手镯', '耳环']);
   const STAR_VALUES = {
     special: {1:6665,2:7417,3:8170,4:8922,5:9675},
@@ -539,7 +558,8 @@
   const B70_BY_PART = Object.fromEntries(B70_OPTIONS.map(v => [v.partIndex, v]));
   const TOP_K = 10;
   const FULL_MASK = (1 << PARTS.length) - 1;
-  const STORAGE_KEY = 'equipment_planner_final_v20260324_top5';
+  const STORAGE_KEY = 'equipment_planner_final_v20260324_top10';
+  const LEGACY_STORAGE_KEYS = ['equipment_planner_final_v20260324_top5'];
   const CACHE_STORAGE_KEY = 'equipment_planner_cache_slots_v20260324_top10';
   const CACHE_NAME_STORAGE_KEY = 'equipment_planner_cache_slot_names_v20260324_top10';
   const CACHE_SLOT_COUNT = 16;
@@ -629,6 +649,7 @@
   let recognitionNameWorkerInstance = null;
   let tesseractScriptPromise = null;
   let saveStateTimer = null;
+  let currentScoreDirtyTimer = null;
   let state = loadState();
   let cacheSlotState = loadCacheSlots();
   let cacheSlotNames = loadCacheSlotNames();
@@ -940,11 +961,21 @@
     const bestOtherStrong = rawScores
       .filter(entry => entry.suitIndex !== 12)
       .reduce((max, entry) => Math.max(max, Number.isFinite(entry.score) ? entry.score : Number.NEGATIVE_INFINITY), Number.NEGATIVE_INFINITY);
-    const aliasTokens = ['逝麻','逝磨','逝糜','逝订','六订','削冶','削壮','削码','上妆'];
+    const aliasTokens = ['逝麻','逝磨','逝糜','逝订','六订','白磨','上妆'];
     if(aliasTokens.some(token => compact.includes(token))) return 95;
     if(compact.includes('逝')) return 95;
     if((compact.includes('之力') || compact.includes('力')) && bestOtherStrong < 90) return 26;
     return Number.NEGATIVE_INFINITY;
+  }
+  function applySuitNameHintScores(compact, rawScores){
+    Object.entries(SUIT_NAME_HINTS).forEach(([rawSuitIndex, hints]) => {
+      const suitIndex = Number(rawSuitIndex);
+      hints.forEach(({token, score}) => {
+        if(compact.includes(token)){
+          rawScores[suitIndex].score = Math.max(rawScores[suitIndex].score, score);
+        }
+      });
+    });
   }
   function buildSuitNameScoreEntries(rawText){
     const nameWindow = extractSuitNameWindow(rawText);
@@ -971,6 +1002,7 @@
       const distance = Math.min(...windows.map(part => levenshteinDistance(part, prefix)));
       return {suitIndex, score: common * 12 - distance * 5 - Math.abs(compact.length - prefix.length) * 0.5};
     });
+    applySuitNameHintScores(compact, rawScores);
     const shiMoHeuristicScore = getShiMoHeuristicScore(compact, rawScores);
     if(Number.isFinite(shiMoHeuristicScore)){
       rawScores[12].score = Math.max(rawScores[12].score, shiMoHeuristicScore);
@@ -1668,6 +1700,13 @@
     setStatus(message || '输入已更新。修改后不会自动计算，请点击“计算”。', false, silent);
     renderResultCalcPrompt();
   }
+  function scheduleCurrentScoreDirtyPrompt(){
+    if(currentScoreDirtyTimer) clearTimeout(currentScoreDirtyTimer);
+    currentScoreDirtyTimer = setTimeout(() => {
+      currentScoreDirtyTimer = null;
+      markDirtyLight('当前抗魔值已更新，请点击“计算”。');
+    }, 900);
+  }
 
   function getSelectorDisplayText(type){
     const list = type === 'disabled' ? state.disabledSuits.map((flag, index) => flag ? index : null).filter(index => index !== null) : state.setTargets.min2;
@@ -1737,7 +1776,7 @@
       state.setTargets[type] = suitIndex;
       openSetTargetMenu = '';
     }
-    saveState();
+    scheduleSaveState();
     markDirty(type === 'disabled' ? '禁用套装已更新，请点击“计算”。' : '套装件数约束已更新，请点击“计算”。');
   }
   function clearSetTargetSelection(type){
@@ -1745,7 +1784,7 @@
     else if(type === 'min2') state.setTargets.min2 = [];
     else state.setTargets[type] = null;
     openSetTargetMenu = '';
-    saveState();
+    scheduleSaveState();
     markDirty(type === 'disabled' ? '禁用套装已更新，请点击“计算”。' : '套装件数约束已更新，请点击“计算”。');
   }
   function getRequiredCountBySuit(){
@@ -1759,7 +1798,8 @@
 
   function loadState(){
     try {
-      const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      const saved = localStorage.getItem(STORAGE_KEY) || LEGACY_STORAGE_KEYS.map(key => localStorage.getItem(key)).find(Boolean) || '{}';
+      const raw = JSON.parse(saved);
       return {
         stars: sanitizeMatrix(raw.stars),
         inventory: sanitizeInventory(raw.inventory),
@@ -1821,8 +1861,11 @@
     if(saveStateTimer) clearTimeout(saveStateTimer);
     saveStateTimer = setTimeout(() => {
       saveStateTimer = null;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      saveState();
     }, 300);
+  }
+  function flushStateSave(){
+    saveState();
   }
   function defaultCacheSlots(){ return Array.from({length:CACHE_SLOT_COUNT}, () => null); }
   function sanitizeStateSnapshot(raw){
@@ -1954,13 +1997,41 @@
     floatingHeadRow.innerHTML = headerHtml;
   }
 
-  function attachSuitInitialKey(select, getAllSelects) {
-    let buffer = '', bufferTimer = null;
-    select.addEventListener('mousedown', e => {
-      if(document.activeElement !== select) { e.preventDefault(); select.focus(); }
+  function getLockSelectValue(partIndex){
+    const lockInfo = getLockInfo(partIndex);
+    return lockInfo?.type === 'suit' ? `s:${lockInfo.suitIndex}` : (lockInfo?.type === 'b70' ? lockInfo.token : '');
+  }
+
+  function getCurrentSelectValue(partIndex){
+    const curr = state.currentWear[partIndex];
+    return curr.type === 'suit' ? `s:${curr.suitIndex}` : (curr.type === 'b70' ? curr.b70Token : '');
+  }
+
+  function renderEquipmentOptions(partIndex, selectedValue, emptyLabel = ''){
+    return [`<option value=""${selectedValue === '' ? ' selected' : ''}>${emptyLabel}</option>`]
+      .concat(B70_BY_PART[partIndex] ? [`<option value="${B70_BY_PART[partIndex].token}"${selectedValue === B70_BY_PART[partIndex].token ? ' selected' : ''}>70B</option>`] : [])
+      .concat(SUITS.map((_, suitIndex) => {
+        const value = `s:${suitIndex}`;
+        return `<option value="${value}"${selectedValue === value ? ' selected' : ''}>${SUIT_LABELS[suitIndex]}</option>`;
+      }))
+      .join('');
+  }
+
+  function bindSuitInitialKeys(container, selector) {
+    let buffer = '', bufferTimer = null, activeSelect = null;
+    container.addEventListener('mousedown', e => {
+      const select = e.target.closest(selector);
+      if(select && container.contains(select) && document.activeElement !== select) { e.preventDefault(); select.focus(); }
     });
-    select.addEventListener('keydown', e => {
+    container.addEventListener('keydown', e => {
+      const select = e.target.closest(selector);
+      if(!select || !container.contains(select)) return;
       if(e.isComposing) return;
+      if(activeSelect !== select){
+        activeSelect = select;
+        buffer = '';
+        clearTimeout(bufferTimer);
+      }
       const key = e.code.startsWith('Key') ? e.code.slice(3).toLowerCase() : null;
       if(!key) return;
       if(buffer.length === 0) {
@@ -1976,11 +2047,11 @@
         buffer = '';
         const suitIndex = SUIT_BY_TWO[twoKey];
         if(suitIndex === undefined) return;
-        const all = getAllSelects();
+        const all = [...container.querySelectorAll(selector)];
         const idx = all.indexOf(select);
         select.value = `s:${suitIndex}`;
-        select.dispatchEvent(new Event('change'));
-        const newAll = getAllSelects();
+        select.dispatchEvent(new Event('change', {bubbles:true}));
+        const newAll = [...container.querySelectorAll(selector)];
         if(idx >= 0 && idx < newAll.length - 1) newAll[idx + 1].focus();
       }
     });
@@ -1988,26 +2059,9 @@
 
   function renderLockBar(){
     lockBar.innerHTML = PARTS.map((part, partIndex) => {
-      const lockInfo = getLockInfo(partIndex);
-      const current = lockInfo?.type === 'suit' ? `s:${lockInfo.suitIndex}` : (lockInfo?.type === 'b70' ? lockInfo.token : '');
-      const options = ['<option value="">不锁</option>']
-        .concat(B70_BY_PART[partIndex] ? [`<option value="${B70_BY_PART[partIndex].token}">70B</option>`] : [])
-        .concat(SUITS.map((_, suitIndex) => `<option value="s:${suitIndex}">${SUIT_LABELS[suitIndex]}</option>`))
-        .join('');
+      const options = renderEquipmentOptions(partIndex, getLockSelectValue(partIndex), '不锁');
       return `<div class="lock-item"><label>${part}</label><select class="lock-select" data-part="${partIndex}">${options}</select></div>`;
     }).join('');
-    lockBar.querySelectorAll('.lock-select').forEach(select => {
-      const partIndex = Number(select.dataset.part);
-      const lockInfo = getLockInfo(partIndex);
-      select.value = lockInfo?.type === 'suit' ? `s:${lockInfo.suitIndex}` : (lockInfo?.type === 'b70' ? lockInfo.token : '');
-      select.onchange = event => {
-        const idx = Number(event.target.dataset.part);
-        state.locks[idx] = normalizeLockValue(idx, event.target.value);
-        saveState();
-        markDirty('锁定已更新，请点击”计算”。');
-      };
-      attachSuitInitialKey(select, () => [...lockBar.querySelectorAll('.lock-select')]);
-    });
   }
 
   function renderCurrentPanel(){
@@ -2015,59 +2069,24 @@
     currentWearBar.innerHTML = CURRENT_WEAR_ORDER.map(partIndex => {
       const part = PARTS[partIndex];
       const curr = state.currentWear[partIndex];
-      const options = ['<option value=""></option>']
-        .concat(B70_BY_PART[partIndex] ? [`<option value="${B70_BY_PART[partIndex].token}">70B</option>`] : [])
-        .concat(SUITS.map((_, suitIndex) => `<option value="s:${suitIndex}">${SUIT_LABELS[suitIndex]}</option>`))
-        .join('');
+      const options = renderEquipmentOptions(partIndex, getCurrentSelectValue(partIndex));
       return `<div class="current-item">
         <label>${part}</label>
         <div class="current-controls">
           <select class="current-select" data-part="${partIndex}">${options}</select>
-          <select class="current-star" data-star-part="${partIndex}">
-            <option value="0">-</option>
-            <option value="1">1星</option>
-            <option value="2">2星</option>
-            <option value="3">3星</option>
-            <option value="4">4星</option>
-            <option value="5">5星</option>
+          <select class="current-star${curr.type !== 'suit' ? ' hide' : ''}" data-star-part="${partIndex}">
+            <option value="0"${curr.type !== 'suit' || curr.star === 0 ? ' selected' : ''}>-</option>
+            <option value="1"${curr.type === 'suit' && curr.star === 1 ? ' selected' : ''}>1星</option>
+            <option value="2"${curr.type === 'suit' && curr.star === 2 ? ' selected' : ''}>2星</option>
+            <option value="3"${curr.type === 'suit' && curr.star === 3 ? ' selected' : ''}>3星</option>
+            <option value="4"${curr.type === 'suit' && curr.star === 4 ? ' selected' : ''}>4星</option>
+            <option value="5"${curr.type === 'suit' && curr.star === 5 ? ' selected' : ''}>5星</option>
           </select>
         </div>
       </div>`;
     }).join('');
-    currentWearBar.querySelectorAll('.current-select').forEach(select => {
-      const partIndex = Number(select.dataset.part);
-      const curr = state.currentWear[partIndex];
-      select.value = curr.type === 'suit' ? `s:${curr.suitIndex}` : (curr.type === 'b70' ? curr.b70Token : '');
-      select.onchange = event => {
-        const idx = Number(event.target.dataset.part);
-        const value = event.target.value;
-        if(!value){ state.currentWear[idx] = {type:'', suitIndex:null, b70Token:'', star:0}; }
-        else if(value.startsWith('s:')){
-          const suitIndex = clampInt(value.slice(2),0,SUITS.length-1);
-          const tableStar = clampInt(state.stars?.[suitIndex]?.[idx] ?? 0, 0, 5);
-          state.currentWear[idx] = {type:'suit', suitIndex, b70Token:'', star:tableStar};
-        }
-        else { state.currentWear[idx] = {type:'b70', suitIndex:null, b70Token:value, star:0}; }
-        saveState();
-        markDirty('当前穿戴已更新，请点击”计算”。');
-      };
-      attachSuitInitialKey(select, () => [...currentWearBar.querySelectorAll('.current-select')]);
-    });
-    currentWearBar.querySelectorAll('.current-star').forEach(select => {
-      const partIndex = Number(select.dataset.starPart);
-      const curr = state.currentWear[partIndex];
-      select.value = String(curr.type === 'suit' ? curr.star : 0);
-      if(curr.type !== 'suit') select.classList.add('hide');
-      select.onchange = event => {
-        const idx = Number(event.target.dataset.starPart);
-        state.currentWear[idx].star = clampInt(event.target.value, 0, 5);
-        saveState();
-        markDirty('当前穿戴星级已更新，请点击“计算”。');
-      };
-    });
     const evalResult = evaluateCurrentWear();
     renderCurrentSummary(evalResult);
-    bindCurrentScoreInput();
     return evalResult;
   }
   function renderCurrentSummary(evalResult = evaluateCurrentWear()){
@@ -2083,8 +2102,49 @@
       event.target.value = state.currentScore;
       scheduleSaveState();
       renderCurrentSummary();
-      markDirtyLight('当前抗魔值已更新，请点击“计算”。');
+      lastComputedPlans = [];
+      openSetTargetMenu = '';
+      resultsBox.innerHTML = '';
+      renderResultCalcPrompt();
+      scheduleCurrentScoreDirtyPrompt();
     };
+  }
+  function bindLockAndCurrentEvents(){
+    lockBar.addEventListener('change', event => {
+      const select = event.target.closest('.lock-select');
+      if(!select || !lockBar.contains(select)) return;
+      const idx = Number(select.dataset.part);
+      state.locks[idx] = normalizeLockValue(idx, select.value);
+      scheduleSaveState();
+      markDirty('锁定已更新，请点击“计算”。');
+    });
+    currentWearBar.addEventListener('change', event => {
+      const currentSelect = event.target.closest('.current-select');
+      if(currentSelect && currentWearBar.contains(currentSelect)){
+        const idx = Number(currentSelect.dataset.part);
+        const value = currentSelect.value;
+        if(!value){ state.currentWear[idx] = {type:'', suitIndex:null, b70Token:'', star:0}; }
+        else if(value.startsWith('s:')){
+          const suitIndex = clampInt(value.slice(2),0,SUITS.length-1);
+          const tableStar = clampInt(state.stars?.[suitIndex]?.[idx] ?? 0, 0, 5);
+          state.currentWear[idx] = {type:'suit', suitIndex, b70Token:'', star:tableStar};
+        }
+        else { state.currentWear[idx] = {type:'b70', suitIndex:null, b70Token:value, star:0}; }
+        scheduleSaveState();
+        markDirty('当前穿戴已更新，请点击“计算”。');
+        return;
+      }
+      const starSelect = event.target.closest('.current-star');
+      if(!starSelect || !currentWearBar.contains(starSelect)) return;
+      const idx = Number(starSelect.dataset.starPart);
+      if(!state.currentWear[idx]) state.currentWear[idx] = {type:'', suitIndex:null, b70Token:'', star:0};
+      state.currentWear[idx].star = clampInt(starSelect.value, 0, 5);
+      scheduleSaveState();
+      markDirty('当前穿戴星级已更新，请点击“计算”。');
+    });
+    bindSuitInitialKeys(lockBar, '.lock-select');
+    bindSuitInitialKeys(currentWearBar, '.current-select');
+    bindCurrentScoreInput();
   }
 
   function evaluateCurrentWear(){
@@ -2552,7 +2612,6 @@
     if(!silent && message) showToast(message, isError ? 'error' : 'success');
   }
 
-  function getAllStarInputs(){ return Array.from(document.querySelectorAll('.star-input')); }
   function focusStarInputByIndex(targetIndex){
     const total = SUITS.length * PARTS.length;
     const safeIndex = ((targetIndex % total) + total) % total;
@@ -2977,17 +3036,19 @@
   }
 
   function computeAndRender(switchToResults = false){
-    saveState();
+    if(currentScoreDirtyTimer){
+      clearTimeout(currentScoreDirtyTimer);
+      currentScoreDirtyTimer = null;
+    }
+    flushStateSave();
     openSetTargetMenu = '';
-    renderHead();
-    renderLockBar();
     renderSetTargetBar();
-    const currentEval = renderCurrentPanel();
+    const currentEval = evaluateCurrentWear();
+    renderCurrentSummary(currentEval);
     const result = computeTopPlans();
     if(result.error){
       lastComputedPlans = [];
       resultsBox.innerHTML = '';
-      renderTable();
       updateFloatingHeaderVisibility();
       setStatus(result.error, true);
       setResultStatus(result.error, true);
@@ -3000,7 +3061,6 @@
     }
     lastComputedPlans = plans;
     renderResults(plans, currentEval);
-    renderTable();
     updateFloatingHeaderVisibility();
     setStatus('计算完成。当前结果已更新。');
     setResultStatus(`Top${plans.length} 结果已更新。`);
@@ -3024,6 +3084,9 @@
       ['bonus 2x1star', computeBonusForStars([1,1]).bonus === BONUS_TABLE[1][2]],
       ['inventory merge', computeHighestStarFromCounts({1:4,2:0,3:0,4:0,5:0}).maxStar === 3],
       ['recognition order roundtrip', displayDigitsToStandardDigits(standardDigitsToDisplayDigits([0,1,2,3,4,5,1,2,3,4,5])).join('') === '01234512345'],
+      ['ocr hint fs dragon scale', estimateSuitNameCandidate('复共龙鳞人削壮').suitIndex === 3],
+      ['ocr hint lingyun tianyi', estimateSuitNameCandidate('凑云天仪人削码').suitIndex === 6],
+      ['ocr hint shimo power', estimateSuitNameCandidate('白磨之力尖').suitIndex === 12],
       ['cache slots length', defaultCacheSlots().length === CACHE_SLOT_COUNT],
       ['popcount cache', POPCOUNT_BY_MASK[FULL_MASK] === PARTS.length]
     ];
@@ -3164,6 +3227,7 @@
   bindFloatingHeaderEvents();
   bindRecognitionRowsEvents();
   bindTableEvents();
+  bindLockAndCurrentEvents();
   renderHead();
   renderLockBar();
   renderCurrentPanel();
